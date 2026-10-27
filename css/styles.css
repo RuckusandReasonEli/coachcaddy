@@ -74,6 +74,7 @@ h2, .h2 { margin: 0; font-family: 'Space Grotesk', sans-serif; font-size: 22px; 
 .tile .glyph.at-bottom { top: auto; bottom: 0; }
 .g-gold { color: var(--gold); } .g-brand { color: var(--brand); }
 .tile h2 { font-size: 26px; max-width: 62%; }
+.tile h2.one-line { max-width: 72%; white-space: nowrap; }
 .readout { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--ink2); max-width: 62%; }
 
 .row-link { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--sf); text-decoration: none; color: var(--ink); }

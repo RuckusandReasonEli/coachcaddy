@@ -108,11 +108,11 @@ function home() {
   </header>
   <p class="prompt">Practice or Play?</p>
   ${active}
-  <a class="tile hero" href="#/practice">${golferGlyph(124, 'g-gold', 'var(--hero)')}
-    <span class="lbl">Practice</span><h2>Range, putting or course</h2>
+  <a class="tile hero" href="#/practice">${golferGlyph(112, 'g-gold', 'var(--hero)')}
+    <span class="lbl">Range · Putting · Course</span><h2 class="one-line">Coach: Practice</h2>
     <span class="readout">${shots.length ? `${shots.length} shots · 30 days · ${solid}% solid` : 'Start logging to see your numbers'}</span></a>
   <a class="tile plain" href="#/play">${caddyGlyph(140, 'g-brand at-bottom', 'var(--sf)')}
-    <span class="lbl">Play</span><h2>Caddy</h2>
+    <span class="lbl">On the course</span><h2 class="one-line">Caddy: Play</h2>
     <span class="readout">${c.set ? `${c.temp}°F · ${c.moisture} · ${tempSummary(c)}` : 'Conditions, carries and every lie'}</span></a>
   ${top.length ? `<a class="card" href="#/bag" style="text-decoration:none;color:inherit"><span class="lbl">Most reliable right now</span><div class="chips">${top.map(([id, v]) => `<span class="chip gold" style="display:flex;align-items:center">★ ${esc(club(id).name)} ${v.score}</span>`).join('')}</div></a>`
     : `<a class="card" href="#/bag" style="text-decoration:none;color:inherit"><span class="lbl">Club reliability</span><span class="muted">${relWait(rel)}</span></a>`}
@@ -124,7 +124,7 @@ function practice() {
   const plan = S().plan;
   return `
   <div class="top">${back('', 'Home')}${themeBtn()}</div>
-  <div style="display:flex;align-items:center;gap:10px">${golferGlyph(46, 'g-brand')}<h1>Practice</h1></div>
+  <div style="display:flex;align-items:center;gap:10px">${golferGlyph(46, 'g-brand')}<h1>Coach: Practice</h1></div>
   ${scienceCard('flight')}
   <a class="row-link" href="#/range">${drillGlyph('traj')}<span class="grow"><span class="name">Range</span><span class="muted">Drills, tap ball and grass</span></span><span class="chev">›</span></a>
   <a class="row-link" href="#/putt">${drillGlyph('pworld')}<span class="grow"><span class="name">Putting</span><span class="muted">Line, speed, pressure</span></span><span class="chev">›</span></a>
@@ -366,7 +366,7 @@ function playSetup() {
   return `
   <div class="top">${back('', 'Home')}${themeBtn()}</div>
   <div class="tile hero" style="min-height:150px">${caddyGlyph(128, 'g-gold at-bottom', 'var(--hero)')}
-    <span class="lbl">Your caddy</span><h2>Today’s conditions</h2><span class="readout">Set once. Carries and lies adjust from here.</span></div>
+    <span class="lbl">Caddy: Play</span><h2>Today’s conditions</h2><span class="readout">Set once. Carries and lies adjust from here.</span></div>
   <div style="display:flex;justify-content:space-between;align-items:baseline"><span class="lbl">Temperature</span><span class="big" style="font-size:26px">${c.temp}°F</span></div>
   <input type="range" min="30" max="105" step="1" value="${c.temp}" data-input="temp" aria-label="Temperature in °F">
   <span class="lbl">Moisture</span>
