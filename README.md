@@ -8,9 +8,9 @@ Version 0.1, first working iteration.
 
 ## What's in it
 
-- **Range practice.** Pick from 18 drills, then log every ball on a ball-and-grass target. Tap the ball for contact, tap the grass for where it finished. The bottom row is the chunk zone. Double-tap the ball for an on-target shot, drag to record curve, and optionally add carry yards.
+- **Range practice.** Pick from 18 drills, then log every ball on a ball-and-grass target. Tap the ball for contact and the grass for length and direction, or use the Contact, Length and Direction rows. Every part is optional; tap **Next shot** to save. The bottom row is the chunk zone, drag records curve, and carry yards are optional.
   - The target adapts to the club and shot type: irons show a pin, woods show a fairway with a tee, and pitches and chips show a green with rings.
-- **Putting practice.** 10 drills and a top-down hole logger. Tap the cup for a make, or tap where the ball stopped. Breaking putts read as high side or low side.
+- **Putting practice.** 10 drills and a top-down hole logger. Tap the cup for a make or where the ball stopped, or pick distance (short or long) and direction. Lip outs are one tap. Tap **Next shot** to save. Breaking putts read as high side or low side.
 - **Course practice.** Log a round hole by hole. The recap shows where strokes leaked and builds your next practice plan.
 - **Plain-language recaps.** Each recap names your miss pattern and its likely cause, shows a golf-science diagram, and suggests your next drills.
 - **Caddy.** Set temperature, moisture, elevation and difficulty once. Two swipeable tabs follow:

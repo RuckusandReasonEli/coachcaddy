@@ -91,7 +91,8 @@ function home() {
   const since = Date.now() - 30 * 86400000;
   const recent = st.sessions.filter(s => s.kind === 'range' && s.ended > since);
   const shots = recent.flatMap(s => s.shots);
-  const solid = shots.length ? Math.round(shots.filter(x => ['pure', 'solid', undefined, null].includes(x.contact)).length / shots.length * 100) : null;
+  const withC = shots.filter(x => x.contact);
+  const solid = withC.length ? Math.round(withC.filter(x => ['pure', 'solid'].includes(x.contact)).length / withC.length * 100) : null;
   const top = Object.entries(rel.clubs).filter(([, v]) => v.top).sort((a, b) => b[1].score - a[1].score);
   const last = st.sessions.slice().sort((a, b) => b.ended - a.ended)[0];
   let take = '';
@@ -110,7 +111,7 @@ function home() {
   ${active}
   <a class="tile scene" href="#/practice">${rangeScene()}<span class="scrim"></span><span class="mat"></span>${golferGlyph(104, 'g-gold on-mat', '#276446')}
     <span class="lbl">Range · Putting · Course</span><h2 class="one-line">Coach: Practice</h2>
-    <span class="readout">${shots.length ? `${shots.length} shots · 30 days · ${solid}% solid` : 'Start logging to see your numbers'}</span></a>
+    <span class="readout">${shots.length ? `${shots.length} shots · 30 days${solid != null ? ` · ${solid}% solid` : ""}` : 'Start logging to see your numbers'}</span></a>
   <a class="tile scene" href="#/play">${fairwayScene()}<span class="scrim"></span>${caddyGlyph(136, 'g-gold at-bottom', '#23603F')}
     <span class="lbl">On the course</span><h2 class="one-line">Caddy: Play</h2>
     <span class="readout">${c.set ? `${c.temp}°F · ${c.moisture} · ${tempSummary(c)}` : 'Conditions, carries and every lie'}</span></a>
@@ -165,10 +166,26 @@ function targetSvg(a) {
   const cl = club(a.club);
   const view = viewFor(cl.kind, a.type);
   const shots = drillShots(a).filter(s => s.view === view);
-  const pend = a.pending && a.pending.contact;
-  if (view === 'woods') return drawWoods(shots, pend, S().hand, a.type === 'tee' || cl.id === 'D');
-  if (view === 'green') return drawGreen(shots, pend, S().hand);
-  return drawIrons(shots, pend, S().hand);
+  const pd = a.pending || {};
+  const pt = pd.x != null ? pd : null;
+  if (view === 'woods') return drawWoods(shots, pd.contact, S().hand, a.type === 'tee' || cl.id === 'D', pt);
+  if (view === 'green') return drawGreen(shots, pd.contact, S().hand, pt);
+  return drawIrons(shots, pd.contact, S().hand, pt);
+}
+
+// ---------- shot draft (range) ----------
+// A shot is built up from optional parts and saved with Next shot.
+function hasDraft(pd) { return !!(pd && (pd.contact || pd.row || pd.col || pd.holed || pd.curve || pd.height || pd.carry != null)); }
+function draftPart(pd) {
+  const finish = (pd.row || pd.col || pd.holed)
+    ? { row: pd.row || null, col: pd.col || null, ...(pd.ft != null ? { ft: pd.ft, dx: pd.dx, dy: pd.dy } : {}), ...(pd.holed ? { holed: true } : {}) }
+    : null;
+  return { contact: pd.contact || null, finish, curve: pd.curve || null, carry: pd.carry != null ? pd.carry : null, x: pd.x != null ? pd.x : null, y: pd.y != null ? pd.y : null };
+}
+const OUT_CONTACT = [['pure', 'Pure'], ['thin', 'Thin'], ['chunk', 'Chunk'], ['heel', 'Heel'], ['toe', 'Toe']];
+function outRow(label, act, opts, cur) {
+  return `<div class="out-row"><span class="lbl">${label}</span><div class="out-chips" style="--n:${opts.length}">${opts.map(([v, txt]) =>
+    `<button class="chip sq ${cur === v ? 'on' : ''}" data-act="${act}" data-v="${v}" aria-pressed="${cur === v}">${txt}</button>`).join('')}</div></div>`;
 }
 
 function rangeLog() {
@@ -181,16 +198,27 @@ function rangeLog() {
   const last = a.shots[a.shots.length - 1];
   const rel = reliability(S()).clubs[cl.id];
   const pend = a.pending || {};
+  const view = viewFor(cl.kind, a.type);
+  const has = hasDraft(pend);
+  const draft = { view, height: pend.height || null, ...draftPart(pend) };
+  const lenOpts = view === 'woods' ? [['short', 'Short'], ['pin', 'Normal'], ['long', 'Long']] : [['short', 'Short'], ['pin', 'Pin high'], ['long', 'Long']];
+  const dirOpts = view === 'woods' ? [['obL', 'OB L'], ['left', 'Left'], ['line', 'Fairway'], ['right', 'Right'], ['obR', 'OB R']] : [['left', 'Left'], ['line', 'On line'], ['right', 'Right']];
   const heightRow = st.height ? `<div class="grid3">${['low', 'mid', 'high'].map(h => `<button class="chip sq ${pend.height === h ? 'on' : ''}" data-act="height" data-v="${h}">${h[0].toUpperCase() + h.slice(1)}</button>`).join('')}</div>` : '';
   const curveRow = st.curve ? `<div class="chips">${['hook', 'draw', 'none', 'fade', 'slice'].map(c => `<button class="chip ${pend.curve === c ? 'on' : ''}" data-act="curve" data-v="${c}">${c === 'none' ? 'Straight' : c[0].toUpperCase() + c.slice(1)}</button>`).join('')}</div>` : '';
   return `
   <div class="top"><button class="back" data-act="endRange">End</button><span class="title-sm">${esc(d.name)}${ytLink(d, true)}</span><span class="muted mono">${done}/${d.balls}</span></div>
   <button class="setup-row" data-act="openShotSetup"><span><b>${esc(cl.name)}</b> · ${esc(st.name)} ${rel && !rel.locked ? `<span class="badge ${rel.top ? '' : 'plain'}">${rel.top ? '★ ' : ''}${rel.score}</span>` : ''}</span><span class="muted">Change ›</span></button>
-  <div class="status" aria-live="polite"><span>${last ? esc(describeShot(last)) : pend.contact ? `Contact: ${esc(pend.contact)} · now tap the grass` : 'Tap the ball, then the grass'}</span><span class="muted">${last ? 'Logged' : ''}</span></div>
+  <div class="status ${has ? 'draft' : ''}" aria-live="polite"><span>${has ? esc(describeShot(draft)) : last ? esc(describeShot(last)) : 'Tap the ball, the grass or the rows below'}</span><span class="muted">${has ? 'This shot' : last ? `Saved #${done}` : ''}</span></div>
   ${targetSvg(a)}
-  ${heightRow}${curveRow}
-  <p class="helper">Ball = contact · grass = finish · bottom row = chunk · double-tap ball = on target · drag = curve</p>
-  <div class="btn-row"><button class="btn sec" data-act="undo" style="flex:1">Undo</button><button class="btn dash" data-act="carry" style="flex:2">+ Carry yds (optional)</button></div>
+  <p class="helper">Ball = contact · grass = length and direction · bottom row = chunk · hold the ball = topped or shank · drag = curve. All optional.</p>
+  <div class="outcome">
+    ${outRow('Contact', 'setContact', OUT_CONTACT, pend.contact)}
+    ${outRow('Length', 'setLen', lenOpts, pend.row)}
+    ${outRow('Direction', 'setDir', dirOpts, pend.col)}
+    ${heightRow}${curveRow}
+  </div>
+  <button class="btn pri next-shot" data-act="nextShot" ${has ? '' : 'disabled'}>Next shot ›</button>
+  <div class="btn-row"><button class="btn sec" data-act="undo" style="flex:1">${has ? 'Clear' : 'Undo'}</button><button class="btn dash" data-act="carry" style="flex:2">${pend.carry != null ? `Carry ${pend.carry} yds` : '+ Carry yds (optional)'}</button></div>
   <div class="btn-row"><button class="btn ghost" data-act="nextDrill">${a.di < a.drills.length - 1 ? 'Next drill ›' : 'Finish session ›'}</button></div>`;
 }
 
@@ -258,8 +286,30 @@ function puttPick() {
 
 function puttWords(p) {
   if (p.made) return 'Made it';
-  const side = p.brk !== 'straight' && p.side !== 'center' ? (p.lowSide ? 'low side' : 'high side') : p.side === 'center' ? 'on line' : p.side;
-  return `${p.len === 'long' ? 'Long' : 'Short'} ${Math.max(1, Math.round(p.ft))} ft · ${side}${p.lip ? ' · lip out' : ''}`;
+  const parts = [];
+  const first = [p.len ? (p.len === 'long' ? 'Long' : 'Short') : '', p.ft != null ? `${Math.max(1, Math.round(p.ft))} ft` : ''].filter(Boolean).join(' ');
+  if (first) parts.push(first);
+  if (p.side) parts.push(p.side === 'center' ? 'on line' : p.brk && p.brk !== 'straight' && p.lowSide != null ? (p.lowSide ? 'low side' : 'high side') : p.side);
+  if (p.lip) parts.push('lip out');
+  const w = parts.join(' · ');
+  return w ? w[0].toUpperCase() + w.slice(1) : 'No details';
+}
+
+// ---------- putt draft ----------
+function hasPutt(pd) { return !!(pd && (pd.made || pd.len || pd.side || pd.ft != null || pd.lip)); }
+function lowSideOf(brk, dx, side) {
+  if (brk === 'straight') return null;
+  if (dx != null) return brk === 'right' ? dx > 0 : dx < 0;
+  if (side && side !== 'center') return brk === 'right' ? side === 'right' : side === 'left';
+  return null;
+}
+function draftPutt(a, pd) {
+  const d = drillById(a.drills[a.di]);
+  const base = { t: Date.now(), drill: d.id, dist: a.dist, brk: a.brk };
+  if (pd.made) return { ...base, made: true, ft: 0, dx: 0, dy: 0, side: 'center', len: null, lowSide: null, lip: false, x: 179, y: 150 };
+  const dx = pd.dx != null ? pd.dx : null;
+  return { ...base, made: false, ft: pd.ft != null ? pd.ft : null, dx, dy: pd.dy != null ? pd.dy : null, side: pd.side || null, len: pd.len || null,
+    lowSide: lowSideOf(a.brk, dx, pd.side), lip: !!pd.lip, x: pd.x != null ? pd.x : null, y: pd.y != null ? pd.y : null };
 }
 
 function puttLog() {
@@ -270,13 +320,21 @@ function puttLog() {
   const made = mine.filter(p => p.made).length;
   const last = a.putts[a.putts.length - 1];
   const brkName = { left: 'Breaks left', straight: 'Straight', right: 'Breaks right' }[a.brk];
+  const pd = a.ppend || {};
+  const has = hasPutt(pd);
   return `
   <div class="top"><button class="back" data-act="endPutt">End</button><span class="title-sm">${esc(d.name)}${ytLink(d, true)}</span><span class="muted mono">${mine.length}/${d.putts}</span></div>
   <button class="setup-row" data-act="openPuttSetup"><span><b>${a.dist} ft</b> · ${brkName}</span><span class="muted">Change ›</span></button>
-  <div class="status" aria-live="polite"><span>${last ? esc(puttWords(last)) : 'Tap the cup or where it stopped'}</span><span class="muted">Made ${made} of ${mine.length}</span></div>
-  ${drawPutt(mine, a.brk)}
-  <p class="helper">Tap the cup if it dropped, or where the ball stopped. Gold = ideal pace.</p>
-  <div class="btn-row"><button class="btn sec" data-act="undoPutt">Undo</button><button class="btn dash" data-act="lip">Lip out</button></div>
+  <div class="status ${has ? 'draft' : ''}" aria-live="polite"><span>${has ? esc(puttWords(draftPutt(a, pd))) : last ? esc(puttWords(last)) : 'Tap the cup or where it stopped'}</span><span class="muted">${has ? 'This putt' : `Made ${made} of ${mine.length}`}</span></div>
+  ${drawPutt(mine, a.brk, pd.made ? { x: 179, y: 150 } : pd.x != null ? pd : null)}
+  <p class="helper">Tap the cup if it dropped, or where the ball stopped. Or just pick length and direction. Gold = ideal pace.</p>
+  <div class="outcome">
+    ${outRow('Result', 'puttResult', [['made', 'Made it'], ['lip', 'Lip out']], pd.made ? 'made' : pd.lip ? 'lip' : null)}
+    ${outRow('Distance', 'puttLen', [['short', 'Short'], ['long', 'Long']], pd.len)}
+    ${outRow('Direction', 'puttSide', [['left', 'Left'], ['center', 'On line'], ['right', 'Right']], pd.side)}
+  </div>
+  <button class="btn pri next-shot" data-act="nextPutt" ${has ? '' : 'disabled'}>Next shot ›</button>
+  <div class="btn-row"><button class="btn sec" data-act="undoPutt" style="flex:1">${has ? 'Clear' : 'Undo'}</button></div>
   <div class="btn-row"><button class="btn ghost" data-act="nextPuttDrill">${a.di < a.drills.length - 1 ? 'Next drill ›' : 'Finish session ›'}</button></div>`;
 }
 
@@ -491,7 +549,7 @@ function askNumber(title, value, onOk) {
 }
 
 // ---------- target interaction ----------
-let gesture = null, lastBallTap = 0, pressTimer = null;
+let gesture = null, pressTimer = null;
 
 function bindTarget(kind) {
   const svg = app.querySelector('[data-target]');
@@ -536,31 +594,29 @@ function rangeInput(start, p, curve, long) {
   const hand = S().hand;
   const hit = hitTest(view, p.x, p.y, hand);
   if (!hit) return;
-  const pend = a.pending || {};
-  const curveName_ = curve ? curveName(curve, hand) : (pend.curve || null);
-  if (hit.kind === 'ball' && !curve) {
-    let sector = hit.sector;
-    if (long) sector = sector === 'thin' ? 'top' : sector === 'heel' ? 'shank' : sector;
-    const now = Date.now();
-    if (now - lastBallTap < 380) {               // double tap: that contact, on target
-      lastBallTap = 0;
-      const center = view === 'green' ? { x: 179, y: 136 } : { x: 179, y: 108 };
-      const finish = view === 'green' ? { ft: 0.5, dx: 0, dy: 0, row: 'pin', col: 'line' } : { row: 'pin', col: 'line' };
-      return commitShot({ contact: pend.contact || sector, finish, curve: curveName_, ...center }, view);
+  const cn = curve ? curveName(curve, hand) : null;
+  const clearPos = { ft: null, dx: null, dy: null, holed: false };
+  update(s => {
+    const pd = s.active.pending = s.active.pending || {};
+    if (cn) pd.curve = cn;
+    if (hit.kind === 'ball' && !curve) {            // contact; tap the same spot again to clear it
+      let sector = hit.sector;
+      if (long) sector = sector === 'thin' ? 'top' : sector === 'heel' ? 'shank' : sector;
+      pd.contact = pd.contact === sector ? null : sector;
+    } else if (hit.kind === 'ball') {               // a drag that ends on the ball: on target
+      Object.assign(pd, clearPos, view === 'green' ? { row: 'pin', col: 'line', x: 179, y: 136 } : { row: 'pin', col: 'line', x: 179, y: 108 });
+    } else if (hit.kind === 'chunk') {
+      Object.assign(pd, clearPos, { contact: 'chunk', row: 'short', col: hit.col, x: p.x, y: p.y });
+    } else if (hit.kind === 'tee') {
+      Object.assign(pd, clearPos, { contact: 'skied', row: 'short', col: 'line', x: p.x, y: p.y });
+    } else if (hit.kind === 'grass') {
+      Object.assign(pd, clearPos, { row: hit.row, col: hit.col, x: p.x, y: p.y });
+    } else if (hit.kind === 'green') {
+      Object.assign(pd, { row: hit.row, col: hit.col, ft: hit.ft, dx: hit.dx, dy: hit.dy, holed: !!hit.holed, x: p.x, y: p.y });
     }
-    lastBallTap = now;
-    update(s => { s.active.pending = { ...pend, contact: sector }; });
-    return render();
-  }
-  lastBallTap = 0;
-  if (hit.kind === 'ball' && curve) {
-    // drag that ended on the ball: treat as on target
-    return commitShot({ contact: pend.contact || 'solid', finish: { row: 'pin', col: 'line' }, curve: curveName_, x: 179, y: 108 }, view);
-  }
-  if (hit.kind === 'chunk') return commitShot({ contact: 'chunk', finish: { row: 'short', col: hit.col }, curve: null, x: p.x, y: p.y }, view);
-  if (hit.kind === 'tee') return commitShot({ contact: 'skied', finish: { row: 'short', col: 'line' }, curve: null, x: p.x, y: p.y }, view);
-  if (hit.kind === 'grass') return commitShot({ contact: pend.contact || 'solid', finish: { row: hit.row, col: hit.col }, curve: curveName_, x: p.x, y: p.y }, view);
-  if (hit.kind === 'green') return commitShot({ contact: pend.contact || 'solid', finish: { ft: hit.ft, dx: hit.dx, dy: hit.dy, row: hit.row, col: hit.col, holed: hit.holed }, curve: null, x: p.x, y: p.y }, view);
+  });
+  if (navigator.vibrate) navigator.vibrate(6);
+  render();
 }
 
 function commitShot(part, view) {
@@ -585,27 +641,38 @@ function commitShot(part, view) {
   if (advanced) toast(`${d.name} done. Next: ${advanced}`);
   else if (drillShots(S().active).length === d.balls) toast(`${d.name} done. Tap Finish when ready.`);
   render();
-  if (shotType(shot.type).carryPrompt && !advanced) promptCarry();
 }
 
+// Carry belongs to the shot being filled in.
 function promptCarry() {
   const a = S().active;
-  const last = a.shots[a.shots.length - 1];
-  if (!last) return toast('Log a ball first');
-  askNumber('Carry yards', last.carry || club(last.club).carry, v => { update(s => { s.active.shots[s.active.shots.length - 1].carry = v; }); render(); });
+  const pd = a.pending || {};
+  askNumber('Carry yards', pd.carry != null ? pd.carry : club(a.club).carry, v => { update(s => { s.active.pending = { ...(s.active.pending || {}), carry: v }; }); render(); });
 }
 
+// A tap fills in the putt being logged; Next shot saves it.
 function logPutt(p) {
-  const a = S().active;
-  const d = drillById(a.drills[a.di]);
   const hit = hitTest('putt', p.x, p.y, S().hand);
-  const base = { t: Date.now(), drill: d.id, dist: a.dist, brk: a.brk, x: p.x, y: p.y };
-  const putt = hit.kind === 'made'
-    ? { ...base, made: true, ft: 0, dx: 0, dy: 0, side: 'center', len: null, lowSide: null, x: 179, y: 150 }
-    : { ...base, made: false, ft: hit.ft, dx: hit.dx, dy: hit.dy, side: hit.side, len: hit.len, lowSide: a.brk === 'right' ? hit.dx > 0 : a.brk === 'left' ? hit.dx < 0 : null };
+  update(s => {
+    const lip = !!(s.active.ppend && s.active.ppend.lip);
+    s.active.ppend = hit.kind === 'made'
+      ? { made: true }
+      : { made: false, ft: hit.ft, dx: hit.dx, dy: hit.dy, side: hit.side, len: hit.len, lip, x: p.x, y: p.y };
+  });
+  if (navigator.vibrate) navigator.vibrate(6);
+  render();
+}
+
+function commitPutt() {
+  const a = S().active;
+  const pd = a.ppend || {};
+  if (!hasPutt(pd)) return toast('Tap where it stopped, or pick distance or direction');
+  const d = drillById(a.drills[a.di]);
+  const putt = draftPutt(a, pd);
   let advanced = false;
   update(s => {
     s.active.putts.push(putt);
+    s.active.ppend = {};
     const n = s.active.putts.filter(x => x.drill === d.id).length;
     if (n >= d.putts && s.active.di < s.active.drills.length - 1) {
       s.active.di++;
@@ -652,7 +719,15 @@ const actions = {
   closeSheet: () => closeOverlays(),
   height: v => { update(s => { s.active.pending = { ...(s.active.pending || {}), height: v }; }); render(); },
   curve: v => { update(s => { s.active.pending = { ...(s.active.pending || {}), curve: v }; }); render(); },
-  undo: () => { update(s => { s.active.shots.pop(); s.active.pending = {}; }); render(); },
+  undo: () => { update(s => { if (hasDraft(s.active.pending)) s.active.pending = {}; else s.active.shots.pop(); }); render(); },
+  setContact: v => { update(s => { const pd = s.active.pending = s.active.pending || {}; pd.contact = pd.contact === v ? null : v; }); render(); },
+  setLen: v => { update(s => { const pd = s.active.pending = s.active.pending || {}; pd.row = pd.row === v ? null : v; Object.assign(pd, { x: null, y: null, ft: null, dx: null, dy: null, holed: false }); }); render(); },
+  setDir: v => { update(s => { const pd = s.active.pending = s.active.pending || {}; pd.col = pd.col === v ? null : v; Object.assign(pd, { x: null, y: null, ft: null, dx: null, dy: null, holed: false }); }); render(); },
+  nextShot: () => {
+    const a = S().active; const pd = a.pending || {};
+    if (!hasDraft(pd)) return toast('Mark contact, length or direction first');
+    commitShot(draftPart(pd), viewFor(club(a.club).kind, a.type));
+  },
   carry: () => promptCarry(),
   nextDrill: () => {
     const a = S().active;
@@ -679,12 +754,15 @@ const actions = {
   openPuttSetup: () => openOverlay(puttSetupSheet()),
   setDist: v => { update(s => { s.active.dist = +v; }); render(); openOverlay(puttSetupSheet()); },
   setBreak: v => { update(s => { s.active.brk = v; }); render(); openOverlay(puttSetupSheet()); },
-  undoPutt: () => { update(s => { s.active.putts.pop(); }); render(); },
-  lip: () => {
-    const a = S().active; const l = a.putts[a.putts.length - 1];
-    if (!l || l.made) return toast('Lip out marks your last missed putt');
-    update(s => { const p = s.active.putts[s.active.putts.length - 1]; p.lip = !p.lip; }); render();
-  },
+  undoPutt: () => { update(s => { if (hasPutt(s.active.ppend)) s.active.ppend = {}; else s.active.putts.pop(); }); render(); },
+  puttResult: v => { update(s => {
+    const pd = s.active.ppend = s.active.ppend || {};
+    if (v === 'made') { s.active.ppend = pd.made ? {} : { made: true }; }
+    else { pd.lip = !pd.lip; if (pd.lip) pd.made = false; }
+  }); render(); },
+  puttLen: v => { update(s => { const pd = s.active.ppend = s.active.ppend || {}; pd.made = false; pd.len = pd.len === v ? null : v; Object.assign(pd, { x: null, y: null, ft: null, dx: null, dy: null }); }); render(); },
+  puttSide: v => { update(s => { const pd = s.active.ppend = s.active.ppend || {}; pd.made = false; pd.side = pd.side === v ? null : v; Object.assign(pd, { x: null, y: null, ft: null, dx: null, dy: null }); }); render(); },
+  nextPutt: () => commitPutt(),
   nextPuttDrill: () => {
     const a = S().active;
     if (a.di < a.drills.length - 1) { update(s => { s.active.di++; const nd = drillById(s.active.drills[s.active.di]); s.active.dist = nd.dist; s.active.brk = nd.brk; }); render(); }

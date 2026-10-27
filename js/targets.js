@@ -104,14 +104,10 @@ export function curveName(curve, hand) {
 
 // ---------- drawing ----------
 
-function dots(shots, last) {
-  return shots.map((s, i) => {
-    if (s.x == null) return '';
-    const isLast = i === shots.length - 1 && last;
-    return isLast
-      ? `<circle cx="${s.x}" cy="${s.y}" r="12" class="t-mark"/>`
-      : `<circle cx="${s.x}" cy="${s.y}" r="5" class="t-ghost"/>`;
-  }).join('');
+// Logged shots show as small ghosts; the shot being filled in shows as a ring.
+function dots(shots, pt) {
+  const ghosts = shots.map(s => s.x == null ? '' : `<circle cx="${s.x}" cy="${s.y}" r="5" class="t-ghost"/>`).join('');
+  return ghosts + (pt && pt.x != null ? `<circle cx="${pt.x}" cy="${pt.y}" r="12" class="t-mark"/>` : '');
 }
 
 function ballSvg(g, pending, hand, small) {
@@ -145,7 +141,7 @@ function ballSvg(g, pending, hand, small) {
 const open = (aria) => `<svg class="target" viewBox="0 0 ${W} ${H}" role="img" aria-label="${aria}" data-target>
   <defs><clipPath id="tclip"><rect width="${W}" height="${H}" rx="16"/></clipPath></defs>`;
 
-export function drawIrons(shots, pending, hand) {
+export function drawIrons(shots, pending, hand, pt) {
   const g = IRONS;
   return `${open('Irons target: tap the ball for contact, then the grass for where it finished. The bottom row is the chunk zone.')}
   <g clip-path="url(#tclip)">
@@ -163,12 +159,12 @@ export function drawIrons(shots, pending, hand) {
     <text x="60" y="323">Short left</text><text x="179" y="323">Short</text><text x="298" y="323">Short right</text>
     <text x="60" y="400">Chunk left</text><text x="179" y="400">Chunk</text><text x="298" y="400">Chunk right</text>
   </g>
-  ${dots(shots, true)}
+  ${dots(shots, pt)}
   ${ballSvg(g, pending, hand)}
   </svg>`;
 }
 
-export function drawWoods(shots, pending, hand, tee) {
+export function drawWoods(shots, pending, hand, tee, pt) {
   const g = WOODS;
   return `${open('Driver and woods target: fairway in the middle, rough on both sides, out of bounds at the edges. Tap the tee for a skied shot.')}
   <g clip-path="url(#tclip)">
@@ -187,12 +183,12 @@ export function drawWoods(shots, pending, hand, tee) {
     ${tee ? '<text x="222" y="304">Skied</text>' : ''}
     <text x="179" y="388">Short</text>
   </g>
-  ${dots(shots, true)}
+  ${dots(shots, pt)}
   ${ballSvg(g, pending, hand)}
   </svg>`;
 }
 
-export function drawGreen(shots, pending, hand) {
+export function drawGreen(shots, pending, hand, pt) {
   const g = GREEN;
   return `${open('Wedge target: a green with rings at 3 and 10 feet. Tap where the ball finished. The bottom row is the chunk zone.')}
   <g clip-path="url(#tclip)">
@@ -207,17 +203,15 @@ export function drawGreen(shots, pending, hand) {
   <g class="t-labd" text-anchor="middle"><text x="179" y="36">Long</text><text x="44" y="141">Left</text><text x="314" y="141">Right</text><text x="179" y="290">Short</text>
     <text x="146" y="182" font-size="13" font-weight="500">3 ft</text><text x="286" y="262" font-size="13" font-weight="500">10 ft</text></g>
   <g class="t-lab" text-anchor="middle"><text x="60" y="406">Chunk left</text><text x="179" y="406">Chunk</text><text x="298" y="406">Chunk right</text></g>
-  ${dots(shots, true)}
+  ${dots(shots, pt)}
   ${ballSvg(g, pending, hand, true)}
   </svg>`;
 }
 
-export function drawPutt(putts, brk) {
+export function drawPutt(putts, brk, pt) {
   const path = brk === 'right' ? 'M179 410 Q 110 262 175 164' : brk === 'left' ? 'M179 410 Q 248 262 183 164' : 'M179 410 L179 166';
-  const ghosts = putts.map((p, i) => {
-    if (p.x == null) return '';
-    return i === putts.length - 1 ? `<circle cx="${p.x}" cy="${p.y}" r="10" class="t-mark"/>` : `<circle cx="${p.x}" cy="${p.y}" r="5" class="t-ghost-d"/>`;
-  }).join('');
+  const ghosts = putts.map(p => p.x == null ? '' : `<circle cx="${p.x}" cy="${p.y}" r="5" class="t-ghost-d"/>`).join('')
+    + (pt && pt.x != null ? `<circle cx="${pt.x}" cy="${pt.y}" r="10" class="t-mark"/>` : '');
   return `<svg class="target" viewBox="0 0 ${W} ${H}" role="img" aria-label="Putting green from above. Tap the cup for a make, or tap where the ball stopped." data-target>
   <defs><clipPath id="pclip"><rect width="${W}" height="${H}" rx="16"/></clipPath></defs>
   <g clip-path="url(#pclip)">

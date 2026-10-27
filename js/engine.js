@@ -9,36 +9,45 @@ const pct = (a, b) => b ? Math.round((a / b) * 100) : 0;
 
 const CONTACT_WORD = { pure: 'Pure', solid: 'Solid', thin: 'Thin', top: 'Topped', heel: 'Heel', toe: 'Toe', shank: 'Shank', under: 'Under it', skied: 'Skied', chunk: 'Chunk' };
 
+// Length (row) and direction (col) are each optional, so every combination reads naturally.
 export function finishWords(s) {
   if (!s.finish) return '';
-  const f = s.finish;
+  const f = s.finish, r = f.row || null, c = f.col || null;
   if (s.view === 'green') {
     if (f.holed) return 'holed it';
-    const where = [f.row !== 'pin' ? f.row : '', f.col !== 'line' ? f.col : ''].filter(Boolean).join(' ');
-    return `${Math.max(1, Math.round(f.ft))} ft${where ? ', ' + where : ''}`;
+    const where = [r && r !== 'pin' ? r : '', c && c !== 'line' ? c : ''].filter(Boolean).join(' ');
+    if (f.ft != null) return `${Math.max(1, Math.round(f.ft))} ft${where ? ', ' + where : ''}`;
+    if (where) return where;
+    return r === 'pin' && c === 'line' ? 'on target' : r === 'pin' ? 'pin high' : c === 'line' ? 'on line' : '';
   }
   if (s.view === 'woods') {
-    const col = { obL: 'OB left', obR: 'OB right', left: 'left rough', right: 'right rough', line: 'fairway' }[f.col];
-    return (f.row === 'long' ? 'long, ' : f.row === 'short' ? 'short, ' : '') + col;
+    const col = c ? { obL: 'OB left', obR: 'OB right', left: 'left rough', right: 'right rough', line: 'fairway' }[c] : '';
+    const len = r === 'long' ? 'long' : r === 'short' ? 'short' : '';
+    return [len, col].filter(Boolean).join(', ') || (r === 'pin' ? 'normal length' : '');
   }
-  if (f.row === 'pin' && f.col === 'line') return 'on target';
-  if (f.row === 'pin') return f.col;
-  if (f.col === 'line') return f.row;
-  return `${f.row} ${f.col}`;
+  if (r && c) {
+    if (r === 'pin' && c === 'line') return 'on target';
+    if (r === 'pin') return c;
+    if (c === 'line') return r;
+    return `${r} ${c}`;
+  }
+  if (r) return r === 'pin' ? 'pin high' : r;
+  if (c) return c === 'line' ? 'on line' : c;
+  return '';
 }
 
 export function describeShot(s) {
-  const parts = [CONTACT_WORD[s.contact] || 'Solid'];
+  const parts = s.contact ? [CONTACT_WORD[s.contact] || cap(s.contact)] : [];
   const fin = finishWords(s);
   if (fin) parts.push(fin);
   if (s.curve && s.curve !== 'none') parts.push(s.curve);
   if (s.height) parts.push(s.height);
   if (s.carry) parts.push(`${s.carry} yds`);
-  return parts.join(' · ');
+  return parts.length ? cap(parts.join(' · ')) : 'No details';
 }
 
 function dirOf(s) {
-  if (!s.finish) return null;
+  if (!s.finish || !s.finish.col) return null;
   const c = s.finish.col;
   return c === 'obL' ? 'left' : c === 'obR' ? 'right' : c;
 }
@@ -64,19 +73,22 @@ const PATTERNS = [
     say: 'Contact is good; distances are scattered, so gapping is the next job.', drills: ['ladder', 'gapping'], science: 'flight' },
 ];
 
+// Each measure only counts shots where it was recorded (contact, length and direction are all optional).
 function tally(shots) {
   const n = shots.length || 1;
-  const count = (...keys) => shots.filter(s => keys.includes(s.contact)).length;
-  const withFin = shots.filter(s => s.finish);
-  const nf = withFin.length || 1;
+  const withC = shots.filter(s => s.contact);
+  const nc = withC.length || 1;
+  const count = (...keys) => withC.filter(s => keys.includes(s.contact)).length;
+  const withDir = shots.filter(s => s.finish && s.finish.col);
+  const withRow = shots.filter(s => s.finish && s.finish.row);
   return {
     n: shots.length,
-    solid: shots.filter(s => SOLID.has(s.contact || 'solid')).length / n,
-    share: (...keys) => count(...keys) / n,
+    solid: withC.length ? withC.filter(s => SOLID.has(s.contact)).length / nc : null,
+    share: (...keys) => count(...keys) / nc,
     count,
-    dir: d => withFin.filter(s => dirOf(s) === d).length / nf,
-    dirCount: d => withFin.filter(s => dirOf(s) === d).length,
-    row: r => withFin.filter(s => s.finish.row === r).length / nf,
+    dir: d => withDir.filter(s => dirOf(s) === d).length / (withDir.length || 1),
+    dirCount: d => withDir.filter(s => dirOf(s) === d).length,
+    row: r => withRow.filter(s => s.finish.row === r).length / (withRow.length || 1),
     curveShare: (...c) => shots.filter(s => c.includes(s.curve)).length / n,
   };
 }
@@ -100,7 +112,7 @@ export function rangeRecap(session, bag) {
   const shots = session.shots || [];
   if (!shots.length) return { empty: true, headline: 'No balls logged', lines: [], drills: [] };
   const t = tally(shots);
-  const solidPct = Math.round(t.solid * 100);
+  const solidPct = t.solid == null ? null : Math.round(t.solid * 100);
   const lines = [];
 
   // main club and trend
@@ -113,7 +125,8 @@ export function rangeRecap(session, bag) {
   if (ms.length >= 8) {
     const half = Math.floor(ms.length / 2);
     const a = tally(ms.slice(0, half)).solid, b = tally(ms.slice(half)).solid;
-    if (b - a >= 0.15) lines.push(`Your ${mainName} got steadier in the back half.`);
+    if (a == null || b == null) { /* not enough contact data */ }
+    else if (b - a >= 0.15) lines.push(`Your ${mainName} got steadier in the back half.`);
     else if (a - b >= 0.15) lines.push(`Your ${mainName} slipped late; fatigue or rushing are common causes.`);
   }
 
@@ -134,7 +147,7 @@ export function rangeRecap(session, bag) {
   // drills for next time
   let drills = hit ? hit.drills.slice() : [];
   if (!drills.length) drills = solidPct >= 70 ? ['play9', 'onedist'] : ['line', 'gate'];
-  const missClubs = clubIds.filter(id => tally(byClub[id]).solid < 0.7).slice(0, 2);
+  const missClubs = clubIds.filter(id => { const s = tally(byClub[id]).solid; return s != null && s < 0.7; }).slice(0, 2);
   const focusClubs = (missClubs.length ? missClubs : [main]).map(id => (bag.find(c => c.id === id) || {}).name || id);
 
   // shot goals
@@ -146,7 +159,7 @@ export function rangeRecap(session, bag) {
   });
 
   return {
-    headline: `${solidPct}% solid contact`,
+    headline: solidPct == null ? `${shots.length} ball${shots.length === 1 ? '' : 's'} logged` : `${solidPct}% solid contact`,
     solidPct, lines, cause, drills, focusClubs,
     science: hit ? hit.science : 'flight',
     dirs: { left: t.dirCount('left'), line: t.dirCount('line'), right: t.dirCount('right') },
@@ -229,13 +242,18 @@ export function courseRecap(session) {
 
 // ---------- reliability ----------
 
+// Contact, direction and distance each come only from shots where that was recorded.
+// Missing parts drop out and the remaining weights are rescaled; no data at all returns null.
 function sessionClubScore(shots) {
   const W = RELIABILITY.weights;
-  const n = shots.length;
-  const contact = shots.reduce((a, s) => a + (SOLID.has(s.contact || 'solid') ? 1 : (s.contact === 'heel' || s.contact === 'toe') ? 0.5 : 0), 0) / n;
-  const fin = shots.filter(s => s.finish);
-  const nf = fin.length || 1;
-  const line = fin.filter(s => s.view === 'green' ? Math.abs(s.finish.dx || 0) <= 3 : s.finish.col === 'line').length / nf;
+  const avg = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
+  const contact = avg(shots.filter(s => s.contact).map(s => SOLID.has(s.contact) ? 1 : (s.contact === 'heel' || s.contact === 'toe') ? 0.5 : 0));
+  const lineVals = shots.filter(s => s.finish).map(s => {
+    const f = s.finish;
+    if (s.view === 'green' && f.dx != null) return Math.abs(f.dx) <= 3 ? 1 : 0;
+    return f.col ? (f.col === 'line' ? 1 : 0) : null;
+  }).filter(v => v != null);
+  const line = avg(lineVals);
   const carries = shots.map(s => s.carry).filter(c => c != null);
   let dist;
   if (carries.length >= 3) {
@@ -243,9 +261,15 @@ function sessionClubScore(shots) {
     const sd = Math.sqrt(carries.reduce((a, b) => a + (b - mean) ** 2, 0) / carries.length);
     dist = Math.max(0, Math.min(1, 1 - sd / (0.06 * mean)));
   } else {
-    dist = fin.filter(s => s.view === 'green' ? Math.abs(s.finish.dy || 0) <= 3 : s.finish.row === 'pin').length / nf;
+    dist = avg(shots.filter(s => s.finish).map(s => {
+      const f = s.finish;
+      if (s.view === 'green' && f.dy != null) return Math.abs(f.dy) <= 3 ? 1 : 0;
+      return f.row ? (f.row === 'pin' ? 1 : 0) : null;
+    }).filter(v => v != null));
   }
-  return 100 * (W.contact * contact + W.direction * line + W.distance * dist);
+  const parts = [[W.contact, contact], [W.direction, line], [W.distance, dist]].filter(([, v]) => v != null);
+  if (!parts.length) return null;
+  return 100 * parts.reduce((a, [w, v]) => a + w * v, 0) / parts.reduce((a, [w]) => a + w, 0);
 }
 
 export function reliability(state) {
@@ -259,6 +283,7 @@ export function reliability(state) {
     Object.entries(by).forEach(([id, shots]) => {
       if (shots.length < R.minShotsPerSession) return;
       const score = sessionClubScore(shots);
+      if (score == null) return;
       (perClub[id] = perClub[id] || []).push(score);
       all.push({ score, w: Math.pow(R.recencyDecay, idx) });
     });

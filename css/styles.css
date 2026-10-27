@@ -243,3 +243,15 @@ input[type=range] { width: 100%; accent-color: var(--brand); min-height: 32px; }
 .tile.scene .mat { position: absolute; z-index: 1; right: 14px; bottom: 10px; width: 124px; height: 22px; border-radius: 3px; background: repeating-linear-gradient(90deg, #5DAE7C 0 10px, #55A574 10px 20px); border-bottom: 5px solid #14261D; box-shadow: 0 3px 0 rgba(0, 0, 0, .2); transform: perspective(160px) rotateX(38deg); transform-origin: bottom; }
 [data-theme="night"] .tile.scene .scene { filter: brightness(.72) saturate(.9); }
 [data-theme="night"] .tile.scene .mat { filter: brightness(.8); }
+
+/* Shot outcome menu (range and putting) */
+.outcome { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--sf); }
+.out-row { display: grid; grid-template-columns: 76px 1fr; align-items: center; gap: 8px; }
+.out-row .lbl { font-size: 11px; }
+.out-chips { display: grid; grid-template-columns: repeat(var(--n), 1fr); gap: 6px; }
+.out-chips .chip { min-height: 40px; padding: 0 4px; font-size: 14px; justify-content: center; text-align: center; white-space: nowrap; }
+.outcome .grid3, .outcome .chips { margin: 0; }
+.btn.next-shot { width: 100%; font-size: 18px; }
+.btn.next-shot[disabled] { opacity: .45; }
+.status.draft { background: var(--goldSoft); color: var(--goldInk); border-color: var(--gold); }
+.status.draft .muted { color: var(--goldInk); }
