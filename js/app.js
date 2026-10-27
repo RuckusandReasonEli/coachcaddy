@@ -3,7 +3,7 @@ import { S, update, uid, club, exportJSON, resetAll } from './store.js';
 import { SHOT_TYPES, RANGE_DRILLS, PUTT_DRILLS, SURFACES, SLOPES, DIFFICULTY, RELIABILITY } from './data.js';
 import { viewFor, hitTest, curveFromPath, curveName, drawIrons, drawWoods, drawGreen, drawPutt, toViewBox } from './targets.js';
 import { describeShot, rangeRecap, puttRecap, courseRecap, reliability, recommend, adjustedCarry, tempSummary, drillById } from './engine.js';
-import { esc, insignia, caddyGlyph, golferGlyph, bagGlyph, sunIcon, moonIcon, lockIcon, checkOn, checkOff, scienceCard, science, drillGlyph, toast } from './ui.js';
+import { esc, insignia, caddyGlyph, golferGlyph, bagGlyph, sunIcon, moonIcon, lockIcon, checkOn, checkOff, scienceCard, science, drillGlyph, toast, ytLink, openYouTube } from './ui.js';
 import { makeSample } from './sample.js';
 
 const app = document.getElementById('app');
@@ -141,8 +141,8 @@ function rangePick() {
   <div class="chips scroll">${cats.map(c => `<button class="chip ${c === cat ? 'on' : ''}" data-act="rangeCat" data-v="${c}">${c}</button>`).join('')}</div>
   ${list.map(d => {
     const on = ui.rangePick.has(d.id);
-    return `<button class="drill ${on ? 'on' : ''}" data-act="pickRange" data-v="${d.id}" aria-pressed="${on}">${drillGlyph(d.glyph)}
-      <span class="grow"><span class="name">${esc(d.name)}</span><span class="meta">${esc(d.trains)} · ${d.balls} balls · ${esc(club(d.club).name)}, ${esc(shotType(d.type).name.toLowerCase())}</span>${on ? `<span class="how">${esc(d.how)}</span>` : ''}</span>${on ? checkOn : checkOff}</button>`;
+    return `<div class="drill ${on ? 'on' : ''}" role="button" tabindex="0" data-act="pickRange" data-v="${d.id}" aria-pressed="${on}">${drillGlyph(d.glyph)}
+      <span class="grow"><span class="name-row"><span class="name">${esc(d.name)}</span>${ytLink(d)}</span><span class="meta">${esc(d.trains)} · ${d.balls} balls · ${esc(club(d.club).name)}, ${esc(shotType(d.type).name.toLowerCase())}</span>${on ? `<span class="how">${esc(d.how)}</span>` : ''}</span>${on ? checkOn : checkOff}</div>`;
   }).join('')}
   <div class="spacer"></div>
   <button class="btn pri" data-act="startRange" ${n ? '' : 'disabled style="opacity:.5"'}>Start · ${n} drill${n === 1 ? '' : 's'} · ${balls} balls</button>`;
@@ -175,7 +175,7 @@ function rangeLog() {
   const heightRow = st.height ? `<div class="grid3">${['low', 'mid', 'high'].map(h => `<button class="chip sq ${pend.height === h ? 'on' : ''}" data-act="height" data-v="${h}">${h[0].toUpperCase() + h.slice(1)}</button>`).join('')}</div>` : '';
   const curveRow = st.curve ? `<div class="chips">${['hook', 'draw', 'none', 'fade', 'slice'].map(c => `<button class="chip ${pend.curve === c ? 'on' : ''}" data-act="curve" data-v="${c}">${c === 'none' ? 'Straight' : c[0].toUpperCase() + c.slice(1)}</button>`).join('')}</div>` : '';
   return `
-  <div class="top"><button class="back" data-act="endRange">End</button><span class="title-sm">${esc(d.name)}</span><span class="muted mono">${done}/${d.balls}</span></div>
+  <div class="top"><button class="back" data-act="endRange">End</button><span class="title-sm">${esc(d.name)}${ytLink(d, true)}</span><span class="muted mono">${done}/${d.balls}</span></div>
   <button class="setup-row" data-act="openShotSetup"><span><b>${esc(cl.name)}</b> · ${esc(st.name)} ${rel && !rel.locked ? `<span class="badge ${rel.top ? '' : 'plain'}">${rel.top ? '★ ' : ''}${rel.score}</span>` : ''}</span><span class="muted">Change ›</span></button>
   <div class="status" aria-live="polite"><span>${last ? esc(describeShot(last)) : pend.contact ? `Contact: ${esc(pend.contact)} · now tap the grass` : 'Tap the ball, then the grass'}</span><span class="muted">${last ? 'Logged' : ''}</span></div>
   ${targetSvg(a)}
@@ -240,8 +240,8 @@ function puttPick() {
   <div class="chips scroll">${cats.map(c => `<button class="chip ${c === cat ? 'on' : ''}" data-act="puttCat" data-v="${c}">${c}</button>`).join('')}</div>
   ${list.map(d => {
     const on = ui.puttPick.has(d.id);
-    return `<button class="drill ${on ? 'on' : ''}" data-act="pickPutt" data-v="${d.id}" aria-pressed="${on}">${drillGlyph(d.glyph)}
-      <span class="grow"><span class="name">${esc(d.name)}</span><span class="meta">${esc(d.trains)} · ${d.dist} ft · ${d.putts} putts</span>${on ? `<span class="how">${esc(d.how)}</span>` : ''}</span>${on ? checkOn : checkOff}</button>`;
+    return `<div class="drill ${on ? 'on' : ''}" role="button" tabindex="0" data-act="pickPutt" data-v="${d.id}" aria-pressed="${on}">${drillGlyph(d.glyph)}
+      <span class="grow"><span class="name-row"><span class="name">${esc(d.name)}</span>${ytLink(d)}</span><span class="meta">${esc(d.trains)} · ${d.dist} ft · ${d.putts} putts</span>${on ? `<span class="how">${esc(d.how)}</span>` : ''}</span>${on ? checkOn : checkOff}</div>`;
   }).join('')}
   <div class="spacer"></div>
   <button class="btn pri" data-act="startPutt" ${n ? '' : 'disabled style="opacity:.5"'}>Start · ${n} drill${n === 1 ? '' : 's'} · ${putts} putts</button>`;
@@ -262,7 +262,7 @@ function puttLog() {
   const last = a.putts[a.putts.length - 1];
   const brkName = { left: 'Breaks left', straight: 'Straight', right: 'Breaks right' }[a.brk];
   return `
-  <div class="top"><button class="back" data-act="endPutt">End</button><span class="title-sm">${esc(d.name)}</span><span class="muted mono">${mine.length}/${d.putts}</span></div>
+  <div class="top"><button class="back" data-act="endPutt">End</button><span class="title-sm">${esc(d.name)}${ytLink(d, true)}</span><span class="muted mono">${mine.length}/${d.putts}</span></div>
   <button class="setup-row" data-act="openPuttSetup"><span><b>${a.dist} ft</b> · ${brkName}</span><span class="muted">Change ›</span></button>
   <div class="status" aria-live="polite"><span>${last ? esc(puttWords(last)) : 'Tap the cup or where it stopped'}</span><span class="muted">Made ${made} of ${mine.length}</span></div>
   ${drawPutt(mine, a.brk)}
@@ -727,11 +727,17 @@ const actions = {
 };
 
 document.addEventListener('click', e => {
+  const yt = e.target.closest('a[data-yt]');
+  if (yt) { if (openYouTube(yt.dataset.yt)) e.preventDefault(); return; } // never toggles the drill card
   const el = e.target.closest('[data-act]');
   if (!el) return;
   if (el.classList.contains('sheet-wrap') && e.target !== el) return; // clicks inside the sheet
   const fn = actions[el.dataset.act];
   if (fn) { e.preventDefault(); fn(el.dataset.v, el); }
+});
+
+document.addEventListener('keydown', e => {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[role="button"][data-act]')) { e.preventDefault(); e.target.click(); }
 });
 
 document.addEventListener('input', e => {

@@ -214,3 +214,11 @@ input[type=range] { width: 100%; accent-color: var(--brand); min-height: 32px; }
 
 :focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* YouTube drill search link */
+.drill .name-row { display: flex; align-items: flex-start; gap: 8px; }
+.drill .name-row .name { flex: 1 1 auto; min-width: 0; }
+.drill .name-row .yt { flex: none; margin-top: 1px; }
+.yt { display: inline-flex; align-items: center; gap: 5px; font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 0; text-transform: none; color: var(--brand); background: var(--sf2); border: 1px solid var(--line); border-radius: 999px; padding: 4px 9px 4px 5px; text-decoration: none; white-space: nowrap; line-height: 1; min-height: 24px; }
+.yt.icon-only { padding: 5px; }
+.yt:active { transform: scale(.96); }

@@ -144,3 +144,39 @@ export function toast(msg) {
   clearTimeout(t._h);
   t._h = setTimeout(() => t.classList.remove('show'), 2200);
 }
+
+// ---------- YouTube drill search ----------
+// Query: drill name + "golf". Adds "putting" for putting drills and "drill" when the name lacks it,
+// so "Slow motion" finds the drill rather than pro swing videos.
+export function ytQuery(d) {
+  const putt = d.putts != null && !/putt/i.test(d.name);
+  const drill = /drill/i.test(d.name) ? '' : ' drill';
+  return `${d.name}${putt ? ' putting' : ''}${drill} golf`;
+}
+export function ytWebUrl(q) { return 'https://www.youtube.com/results?search_query=' + encodeURIComponent(q); }
+
+const playIcon = `<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="7" class="f-brand"/><path d="M5.4 4.2 L10 7 L5.4 9.8 Z" class="f-onbrand"/></svg>`;
+
+export function ytLink(d, compact = false) {
+  const q = ytQuery(d);
+  return `<a class="yt${compact ? ' icon-only' : ''}" href="${ytWebUrl(q)}" target="_blank" rel="noopener" data-yt="${esc(q)}" aria-label="Search YouTube for ${esc(q)}">${playIcon}${compact ? '' : '<span>YouTube</span>'}</a>`;
+}
+
+// iPhone/iPad: open the YouTube app directly, fall back to the website if the app isn't installed.
+// Everywhere else the normal link opens (Android hands youtube.com links to the app).
+export function openYouTube(q) {
+  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (!ios) return false;
+  const web = ytWebUrl(q);
+  let left = false;
+  const gone = () => { left = true; };
+  document.addEventListener('visibilitychange', gone, { once: true });
+  window.addEventListener('pagehide', gone, { once: true });
+  window.location.href = 'youtube://www.youtube.com/results?search_query=' + encodeURIComponent(q);
+  setTimeout(() => {
+    document.removeEventListener('visibilitychange', gone);
+    window.removeEventListener('pagehide', gone);
+    if (!left && document.visibilityState === 'visible') window.location.href = web;
+  }, 1400);
+  return true;
+}
