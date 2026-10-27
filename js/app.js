@@ -3,7 +3,7 @@ import { S, update, uid, club, exportJSON, resetAll } from './store.js';
 import { SHOT_TYPES, RANGE_DRILLS, PUTT_DRILLS, SURFACES, SLOPES, DIFFICULTY, RELIABILITY } from './data.js';
 import { viewFor, hitTest, curveFromPath, curveName, drawIrons, drawWoods, drawGreen, drawPutt, toViewBox } from './targets.js';
 import { describeShot, rangeRecap, puttRecap, courseRecap, reliability, recommend, adjustedCarry, tempSummary, drillById } from './engine.js';
-import { esc, insignia, caddyGlyph, golferGlyph, bagGlyph, sunIcon, moonIcon, lockIcon, checkOn, checkOff, scienceCard, science, drillGlyph, toast, ytLink, openYouTube } from './ui.js';
+import { esc, insignia, caddyGlyph, golferGlyph, bagGlyph, sunIcon, moonIcon, lockIcon, checkOn, checkOff, scienceCard, science, drillGlyph, toast, ytLink, openYouTube, rangeScene, fairwayScene } from './ui.js';
 import { makeSample } from './sample.js';
 
 const app = document.getElementById('app');
@@ -108,10 +108,10 @@ function home() {
   </header>
   <p class="prompt">Practice or Play?</p>
   ${active}
-  <a class="tile hero" href="#/practice">${golferGlyph(112, 'g-gold', 'var(--hero)')}
+  <a class="tile scene" href="#/practice">${rangeScene()}<span class="scrim"></span><span class="mat"></span>${golferGlyph(104, 'g-gold on-mat', '#276446')}
     <span class="lbl">Range · Putting · Course</span><h2 class="one-line">Coach: Practice</h2>
     <span class="readout">${shots.length ? `${shots.length} shots · 30 days · ${solid}% solid` : 'Start logging to see your numbers'}</span></a>
-  <a class="tile plain" href="#/play">${caddyGlyph(140, 'g-brand at-bottom', 'var(--sf)')}
+  <a class="tile scene" href="#/play">${fairwayScene()}<span class="scrim"></span>${caddyGlyph(136, 'g-gold at-bottom', '#23603F')}
     <span class="lbl">On the course</span><h2 class="one-line">Caddy: Play</h2>
     <span class="readout">${c.set ? `${c.temp}°F · ${c.moisture} · ${tempSummary(c)}` : 'Conditions, carries and every lie'}</span></a>
   ${top.length ? `<a class="card" href="#/bag" style="text-decoration:none;color:inherit"><span class="lbl">Most reliable right now</span><div class="chips">${top.map(([id, v]) => `<span class="chip gold" style="display:flex;align-items:center">★ ${esc(club(id).name)} ${v.score}</span>`).join('')}</div></a>`

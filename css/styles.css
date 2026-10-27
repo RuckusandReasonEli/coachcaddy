@@ -231,3 +231,15 @@ input[type=range] { width: 100%; accent-color: var(--brand); min-height: 32px; }
 .masthead .tag { color: #CFE0D5; border-left-color: #E2B65A; }
 .masthead .round-btn, .masthead .pill-link { background: rgba(255,255,255,.10); border-color: rgba(255,255,255,.28); color: #F6F3EA; }
 .prompt { margin: 6px 0 0; text-align: center; font-family: 'Space Grotesk', sans-serif; font-size: 18px; font-weight: 600; letter-spacing: 0.02em; color: var(--ink2); }
+
+/* Home tile scenes */
+.tile.scene { background: #23603F; color: #F6F3EA; border-color: transparent; min-height: 214px; }
+.tile.scene .lbl, .tile.scene .readout { color: #DCEADF; }
+.tile.scene h2, .tile.scene .lbl, .tile.scene .readout { position: relative; z-index: 3; text-shadow: 0 1px 2px rgba(8, 24, 16, .45); }
+.tile.scene .scene { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; }
+.tile.scene .scrim { position: absolute; inset: 0; z-index: 1; background: linear-gradient(90deg, rgba(10, 30, 21, .55) 0%, rgba(10, 30, 21, .28) 45%, rgba(10, 30, 21, 0) 70%); pointer-events: none; }
+.tile.scene .glyph { z-index: 2; color: #E2B65A; }
+.tile.scene .glyph.on-mat { top: auto; bottom: 22px; right: 30px; }
+.tile.scene .mat { position: absolute; z-index: 1; right: 14px; bottom: 10px; width: 124px; height: 22px; border-radius: 3px; background: repeating-linear-gradient(90deg, #5DAE7C 0 10px, #55A574 10px 20px); border-bottom: 5px solid #14261D; box-shadow: 0 3px 0 rgba(0, 0, 0, .2); transform: perspective(160px) rotateX(38deg); transform-origin: bottom; }
+[data-theme="night"] .tile.scene .scene { filter: brightness(.72) saturate(.9); }
+[data-theme="night"] .tile.scene .mat { filter: brightness(.8); }

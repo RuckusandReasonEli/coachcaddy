@@ -180,3 +180,43 @@ export function openYouTube(q) {
   }, 1400);
   return true;
 }
+
+// ---------- Home tile scenes (flat color blocks, same palette as the app icon) ----------
+const trees = (fill) => `<path fill="${fill}" d="M0 30 Q12 14 26 26 Q38 10 54 24 Q68 12 82 26 Q96 8 112 24 Q126 14 140 26 Q156 6 172 24 Q186 12 200 26 Q214 8 230 24 Q244 14 258 26 Q274 6 290 24 Q304 12 318 26 Q334 10 348 24 Q356 18 360 22 L360 0 L0 0 Z"/><rect y="24" width="360" height="12" fill="${fill}"/>`;
+
+// Driving range: tree line, three receding field bands, target greens with flags, range balls.
+export function rangeScene() {
+  const flag = (x, y, h) => `<line x1="${x}" y1="${y}" x2="${x}" y2="${y - h}" stroke="#F6F3EA" stroke-width="1.4"/><path d="M${x} ${y - h} l${h * .5} ${h * .18} l-${h * .5} ${h * .18}Z" fill="#E2B65A"/>`;
+  const balls = [[52,76],[122,70],[204,78],[238,56],[300,66],[334,80],[150,58],[30,62],[270,84]]
+    .map(([x, y]) => `<circle cx="${x}" cy="${y}" r="2.2" fill="#F6F3EA" fill-opacity=".85"/>`).join('');
+  return `<svg class="scene" viewBox="0 0 360 220" preserveAspectRatio="none" aria-hidden="true">
+  <rect width="360" height="220" fill="#276446"/>
+  <rect y="30" width="360" height="44" fill="#3D8762"/>
+  <rect y="74" width="360" height="58" fill="#33795A"/>
+  ${trees('#173F2F')}
+  <ellipse cx="88" cy="50" rx="22" ry="5" fill="#58A47A"/>${flag(88, 50, 12)}
+  <ellipse cx="262" cy="48" rx="16" ry="4" fill="#58A47A"/>${flag(262, 48, 10)}
+  <ellipse cx="176" cy="70" rx="36" ry="7" fill="#4E9A6E"/>${flag(176, 70, 18)}
+  <rect y="132" width="360" height="3" fill="#F6F3EA" fill-opacity=".12"/>
+  ${balls}
+</svg>`;
+}
+
+// Fairway: tree line, rough, striped fairway narrowing to a green and flag, bunker, water down the left.
+export function fairwayScene() {
+  const L = (y) => 190 - (190 - 112) * (y - 40) / 180, R = (y) => 238 + (330 - 238) * (y - 40) / 180; // fairway edges by depth
+  const band = (y1, y2) => `<path d="M${L(y1)} ${y1} L${R(y1)} ${y1} L${R(y2)} ${y2} L${L(y2)} ${y2}Z" fill="#46976A"/>`;
+  return `<svg class="scene" viewBox="0 0 360 220" preserveAspectRatio="none" aria-hidden="true">
+  <rect width="360" height="220" fill="#23603F"/>
+  <path d="M${L(40)} 40 L${R(40)} 40 L${R(220)} 220 L${L(220)} 220Z" fill="#3A8A5F"/>
+  ${band(52, 66)}${band(84, 106)}${band(132, 162)}${band(196, 220)}
+  <path d="M0 36 L150 36 Q176 40 160 62 Q138 92 112 112 Q72 140 30 150 Q12 154 0 156 Z" fill="#2D6F93"/>
+  <path d="M0 36 L150 36 Q176 40 160 62 Q158 64 156 66 Q160 46 138 42 L0 42 Z" fill="#7FC29A" fill-opacity=".45"/>
+  <path d="M0 108 Q60 112 112 112 Q72 140 30 150 Q12 154 0 156 Z" fill="#173F5A" fill-opacity=".5"/>
+  <g fill="none" stroke="#8CC3DD" stroke-opacity=".5" stroke-width="2" stroke-linecap="round"><path d="M28 70 q10 -4 20 0"/><path d="M84 60 q12 -4 24 0"/><path d="M50 100 q10 -4 20 0"/><path d="M110 84 q8 -3 16 0"/></g>
+  ${trees('#173F2F')}
+  <ellipse cx="214" cy="42" rx="30" ry="7" fill="#5DAE7C"/>
+  <ellipse cx="258" cy="48" rx="12" ry="4" fill="#E8D9A8"/>
+  <line x1="216" y1="42" x2="216" y2="20" stroke="#F6F3EA" stroke-width="1.6"/><path d="M216 20 l11 4 l-11 4Z" fill="#E2B65A"/>
+</svg>`;
+}
