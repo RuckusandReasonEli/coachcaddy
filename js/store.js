@@ -24,10 +24,21 @@ function load() {
     const raw = localStorage.getItem(KEY);
     if (!raw) return fresh();
     const s = JSON.parse(raw);
+    if (Array.isArray(s.bag)) s.bag = migrateBag(s.bag);
     return { ...fresh(), ...s, conditions: { ...fresh().conditions, ...(s.conditions || {}) }, caddy: { ...fresh().caddy, ...(s.caddy || {}) } };
   } catch (e) {
     return fresh();
   }
+}
+
+// Older bags named wedges by loft only ("52°"). Give them names and an editable loft.
+function migrateBag(bag) {
+  const named = { PW: ['PW', 46], 52: ['Gap wedge', 52], 56: ['Sand wedge', 56], 60: ['Flop wedge', 60] };
+  return bag.map(c => {
+    const n = named[c.id];
+    if (n && (c.loft == null)) return { ...c, name: /^\d+°$/.test(c.name) || c.name === 'PW' ? n[0] : c.name, loft: n[1] };
+    return c;
+  });
 }
 
 export function save() {
@@ -57,6 +68,11 @@ export function uid() {
 
 export function club(id) {
   return state.bag.find(c => c.id === id) || state.bag[0];
+}
+
+// Clubs currently in the bag (not crossed out).
+export function inBag() {
+  return state.bag.filter(c => !c.out);
 }
 
 export function exportJSON() {

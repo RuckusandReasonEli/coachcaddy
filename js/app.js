@@ -1,6 +1,6 @@
 // Coach Caddy app: hash router and screens.
-import { S, update, uid, club, exportJSON, resetAll } from './store.js';
-import { SHOT_TYPES, RANGE_DRILLS, PUTT_DRILLS, SURFACES, SLOPES, DIFFICULTY, RELIABILITY } from './data.js';
+import { S, update, uid, club, inBag, exportJSON, resetAll } from './store.js';
+import { SHOT_TYPES, RANGE_DRILLS, PUTT_DRILLS, SURFACES, SLOPES, DIFFICULTY, RELIABILITY, MAX_CUSTOM_CLUBS } from './data.js';
 import { viewFor, hitTest, curveFromPath, curveName, drawIrons, drawWoods, drawGreen, drawPutt, toViewBox } from './targets.js';
 import { describeShot, rangeRecap, puttRecap, courseRecap, reliability, recommend, adjustedCarry, tempSummary, drillById } from './engine.js';
 import { esc, insignia, caddyGlyph, golferGlyph, bagGlyph, sunIcon, moonIcon, lockIcon, checkOn, checkOff, scienceCard, science, drillGlyph, toast, ytLink, openYouTube, rangeScene, fairwayScene } from './ui.js';
@@ -73,7 +73,7 @@ function finishActive() {
 }
 
 function relRow(r, top) {
-  if (!r || r.locked) return `<span class="locked" title="Sessions logged with this club">${lockIcon}${r ? r.sessions : 0}/${RELIABILITY.sessionsRequired} sessions</span>`;
+  if (!r || r.locked) return `<span class="locked" title="Sessions logged with this club">${lockIcon}${r ? r.sessions : 0}/${RELIABILITY.sessionsRequired}<span class="sess"> sessions</span></span>`;
   return `<span class="rel"><span class="track"><span class="fill ${top ? 'gold' : ''}" style="width:${r.score}%"></span></span><b>${r.score}</b></span>`;
 }
 
@@ -228,7 +228,7 @@ function shotSetupSheet() {
   const rel = reliability(S()).clubs;
   return `<div class="sheet-wrap" data-act="closeSheet"><div class="sheet" role="dialog" aria-label="Club and shot type" data-stop>
     <div class="grab"></div><h2>Club and shot type</h2>
-    ${groups.map(([name, kinds]) => `<span class="lbl">${name}</span><div class="chips">${S().bag.filter(c => kinds.includes(c.kind)).map(c => {
+    ${groups.map(([name, kinds]) => `<span class="lbl">${name}</span><div class="chips">${inBag().filter(c => kinds.includes(c.kind)).map(c => {
       const r = rel[c.id]; const top = r && r.top;
       return `<button class="chip ${c.id === a.club ? 'on' : ''} ${top ? 'gold' : ''}" data-act="setClub" data-v="${c.id}">${top ? '★ ' : ''}${esc(c.name)}</button>`;
     }).join('')}</div>`).join('')}
@@ -392,7 +392,7 @@ function courseLog() {
   <div class="shot-list">${h.shots.map((s, i) => `<div><span>${i + 1} · ${esc(club(s.club).name)} · ${s.from}</span><b>${s.result}</b></div>`).join('')}</div>
   <div class="card" style="border:2px solid var(--brand)">
     <div style="display:flex;justify-content:space-between;align-items:center"><span class="h2">Shot ${h.shots.length + 1}</span>
-      <select data-act="draftClub" aria-label="Club" style="min-height:40px;border-radius:12px;border:1.5px solid var(--line);background:var(--sf);padding:0 10px">${S().bag.map(c => `<option value="${c.id}" ${c.id === dr.club ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></div>
+      <select data-act="draftClub" aria-label="Club" style="min-height:40px;border-radius:12px;border:1.5px solid var(--line);background:var(--sf);padding:0 10px">${inBag().map(c => `<option value="${c.id}" ${c.id === dr.club ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></div>
     <span class="lbl">From</span><div class="chips">${FROM.map(f => `<button class="chip ${dr.from === f ? 'on' : ''}" data-act="draftFrom" data-v="${f}">${f[0].toUpperCase() + f.slice(1)}</button>`).join('')}</div>
     <span class="lbl">Result</span><div class="chips">${RESULT.map(r => `<button class="chip ${dr.result === r ? 'on' : ''}" data-act="draftResult" data-v="${r}">${r[0].toUpperCase() + r.slice(1)}</button>`).join('')}</div>
     <button class="btn pri" data-act="addShot" ${dr.result ? '' : 'disabled style="opacity:.5"'}>Log shot</button>
@@ -447,7 +447,7 @@ function caddy() {
   const sf = SURFACES[cad.surface], sl = SLOPES[cad.slope];
   const lieName = `${sf.name.toLowerCase()}, ${cad.slope === 'flat' ? 'flat' : sl.name.toLowerCase()}${cad.steep && cad.slope !== 'flat' ? ' (steep)' : ''}`;
   const pickId = rec.pick && rec.pick.c.id;
-  const rows = st.bag.map(cl => {
+  const rows = inBag().map(cl => {
     const r = rel.clubs[cl.id];
     const adj = adjustedCarry(cl, c, rec.choke);
     return `<div class="club-row ${cl.id === pickId ? 'pick' : r && r.top ? 'top' : ''}"><span class="nm">${r && r.top ? '★ ' : ''}${esc(cl.name)}</span><span class="mono">${adj}</span>${relRow(r, r && r.top)}</div>`;
@@ -499,14 +499,24 @@ function bag() {
   <div style="display:flex;align-items:center;justify-content:space-between"><span style="display:flex;align-items:center;gap:10px">${bagGlyph(42, 'g-brand')}<h1>My bag</h1></span><span class="muted mono" style="font-size:12px">70°F · sea level</span></div>
   <div class="seg">${['right', 'left'].map(h => `<button class="${st.hand === h ? 'on' : ''}" data-act="hand" data-v="${h}">${h === 'right' ? 'Right-handed' : 'Left-handed'}</button>`).join('')}</div>
   ${banner}
-  <div class="lbl" style="display:grid;grid-template-columns:84px 60px 60px minmax(0,1fr);gap:8px;padding:0 10px"><span>Club</span><span>Full</span><span>Choked</span><span>Reliability</span></div>
+  <div class="lbl bag-grid bag-head"><span>Club</span><span>Full</span><span>Choked</span><span>Reliability</span><span></span></div>
   <div style="display:flex;flex-direction:column;gap:4px">${st.bag.map(c => {
     const r = rel.clubs[c.id];
-    return `<div class="club-row ${r && r.top ? 'top' : ''}" style="grid-template-columns:84px 60px 60px minmax(0,1fr);gap:8px"><span class="nm">${r && r.top ? '★ ' : ''}${esc(c.name)}</span>
-      <input inputmode="numeric" data-carry="${c.id}" data-field="carry" value="${c.carry}" aria-label="${esc(c.name)} full carry">
-      <input inputmode="numeric" data-carry="${c.id}" data-field="choked" value="${c.choked}" aria-label="${esc(c.name)} choked carry">
-      ${relRow(r, r && r.top)}</div>`;
+    const top = !c.out && r && r.top;
+    const loft = c.kind === 'wedge' || c.loft != null
+      ? `<label class="loft"><input inputmode="numeric" data-loft="${c.id}" value="${c.loft != null ? c.loft : ''}" placeholder="--" aria-label="${esc(c.name)} loft in degrees" ${c.out ? 'disabled' : ''}>°</label>` : '';
+    const x = c.out
+      ? `<button class="x-btn back-in" data-act="toggleOut" data-v="${c.id}" aria-label="Put ${esc(c.name)} back in the bag">↺</button>`
+      : `<button class="x-btn" data-act="toggleOut" data-v="${c.id}" aria-label="Remove ${esc(c.name)} from the bag">×</button>`;
+    const relCell = c.out
+      ? `<span class="out-note">Out of bag${c.custom ? ` · <button class="link-btn" data-act="deleteClub" data-v="${c.id}">Delete</button>` : ''}</span>`
+      : relRow(r, top);
+    return `<div class="club-row bag-grid ${top ? 'top' : ''} ${c.out ? 'out' : ''}"><span class="nm-cell"><span class="nm">${top ? '★ ' : ''}${esc(c.name)}</span>${loft}</span>
+      <input inputmode="numeric" data-carry="${c.id}" data-field="carry" value="${c.carry}" aria-label="${esc(c.name)} full carry" ${c.out ? 'disabled' : ''}>
+      <input inputmode="numeric" data-carry="${c.id}" data-field="choked" value="${c.choked}" aria-label="${esc(c.name)} choked carry" ${c.out ? 'disabled' : ''}>
+      ${relCell}${x}</div>`;
   }).join('')}</div>
+  ${(() => { const n = st.bag.filter(c => c.custom).length; return `<button class="btn dash" data-act="addClub" ${n >= MAX_CUSTOM_CLUBS ? 'disabled style="opacity:.5"' : ''}>+ Add a club&nbsp;<span class="muted" style="font-weight:400">(${n} of ${MAX_CUSTOM_CLUBS} custom)</span></button>`; })()}
   <a class="setup-row" href="#/bag/how" style="text-decoration:none"><span>How reliability works</span><span class="chev">›</span></a>
   <div class="btn-row"><button class="btn ghost" data-act="export">Export data</button><button class="btn ghost" data-act="reset">Reset all</button></div>`;
 }
@@ -544,6 +554,40 @@ function askNumber(title, value, onOk) {
     const m = e.target.closest('[data-modal]');
     if (!m && e.target !== wrap) return;
     if (m && m.dataset.modal === 'ok') { const v = parseInt(inp.value, 10); if (!isNaN(v)) onOk(v); }
+    wrap.remove();
+  });
+}
+
+// Custom club: name, type, optional loft, full carry. Placed in the bag by carry.
+function askClub() {
+  if (S().bag.filter(c => c.custom).length >= MAX_CUSTOM_CLUBS) return toast(`Up to ${MAX_CUSTOM_CLUBS} custom clubs`);
+  const kinds = [['wood', 'Wood'], ['hybrid', 'Hybrid'], ['iron', 'Iron'], ['wedge', 'Wedge']];
+  openOverlay(`<div class="modal-wrap"><div class="modal club-form" role="dialog" aria-label="Add a club"><h2>Add a club</h2>
+    <label class="lbl" for="cName">Name</label><input id="cName" type="text" maxlength="14" placeholder="e.g. 4-hybrid, 2-iron, 64° wedge">
+    <span class="lbl">Type</span><div class="grid4">${kinds.map(([k, n], i) => `<button class="chip sq ${i === 1 ? 'on' : ''}" data-kind="${k}">${n}</button>`).join('')}</div>
+    <div class="two"><label><span class="lbl">Full carry (yds)</span><input id="cCarry" type="number" inputmode="numeric" placeholder="180"></label>
+    <label><span class="lbl">Loft (°, optional)</span><input id="cLoft" type="number" inputmode="numeric" placeholder="--"></label></div>
+    <div class="btn-row"><button class="btn sec" data-modal="cancel">Cancel</button><button class="btn pri" data-modal="ok">Add</button></div></div></div>`);
+  const wrap = document.querySelector('.modal-wrap');
+  let kind = 'hybrid';
+  document.getElementById('cName').focus();
+  wrap.addEventListener('click', e => {
+    const k = e.target.closest('[data-kind]');
+    if (k) { kind = k.dataset.kind; wrap.querySelectorAll('[data-kind]').forEach(b => b.classList.toggle('on', b === k)); return; }
+    const m = e.target.closest('[data-modal]');
+    if (!m && e.target !== wrap) return;
+    if (m && m.dataset.modal === 'ok') {
+      const name = document.getElementById('cName').value.trim();
+      const carry = parseInt(document.getElementById('cCarry').value, 10);
+      const loftRaw = document.getElementById('cLoft').value.trim();
+      const loft = loftRaw === '' ? null : parseInt(loftRaw, 10);
+      if (!name) return toast('Give the club a name');
+      if (isNaN(carry) || carry < 20 || carry > 400) return toast('Enter a full carry between 20 and 400 yards');
+      if (loft != null && (isNaN(loft) || loft < 5 || loft > 70)) return toast('Loft should be between 5° and 70°');
+      const c = { id: 'c' + uid(), name, kind, carry, choked: Math.max(20, Math.round(carry * 0.95)), custom: true, ...(loft != null ? { loft } : {}) };
+      update(s => { s.bag.push(c); s.bag.sort((a, b) => b.carry - a.carry); });
+      toast(`${name} added`); render();
+    }
     wrap.remove();
   });
 }
@@ -799,6 +843,20 @@ const actions = {
   slope: v => { update(s => { s.caddy.slope = v; }); render(); },
   steep: () => { update(s => { s.caddy.steep = !s.caddy.steep; }); render(); },
   hand: v => { update(s => { s.hand = v; }); render(); },
+  toggleOut: v => {
+    const c = S().bag.find(x => x.id === v);
+    if (!c) return;
+    if (!c.out && inBag().length <= 1) return toast('Keep at least one club in the bag');
+    update(s => { const k = s.bag.find(x => x.id === v); k.out = !k.out; });
+    toast(c.out ? `${c.name} back in the bag` : `${c.name} out of the bag`); render();
+  },
+  deleteClub: v => {
+    const c = S().bag.find(x => x.id === v);
+    if (!c || !c.custom) return;
+    if (!confirm(`Delete ${c.name}? Logged shots stay in your history.`)) return;
+    update(s => { s.bag = s.bag.filter(x => x.id !== v); }); render();
+  },
+  addClub: () => askClub(),
   sample: () => {
     if (!confirm('Add sample practice history so you can try reliability and recaps? You can reset it later from My bag.')) return;
     update(s => { s.sessions = s.sessions.concat(makeSample()); });
@@ -851,6 +909,13 @@ document.addEventListener('change', e => {
   const t = e.target;
   if (t.dataset.act === 'draftClub') { update(s => { s.active.draft.club = t.value; }); return; }
   if (t.dataset.input) { render(); return; }
+  if (t.dataset.loft) {
+    const raw = t.value.trim();
+    const v = raw === '' ? null : parseInt(raw, 10);
+    if (v != null && (isNaN(v) || v < 5 || v > 70)) { toast('Loft should be between 5° and 70°'); render(); return; }
+    update(s => { const c = s.bag.find(x => x.id === t.dataset.loft); c.loft = v; });
+    toast('Saved'); return;
+  }
   if (t.dataset.carry) {
     const v = parseInt(t.value, 10);
     if (isNaN(v) || v < 20 || v > 400) { toast('Enter yards between 20 and 400'); render(); return; }

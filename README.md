@@ -21,6 +21,7 @@ Version 0.1, first working iteration.
 - **Club reliability.** Each club gets a 0 to 100 score built from contact (50%), direction (30%) and distance (20%), with recent sessions weighted more. The score is measured against your own average, so 50 is a typical club for you.
   - A club unlocks after 3 practice sessions with it.
   - Your top three are starred, and the caddy prefers them when two clubs can reach.
+- **My bag.** Edit full and choked carries for every club, and the loft of each wedge (PW, gap, sand and flop). Tap × to take a club out of the bag; it stays listed, crossed out in red, and the caddy stops suggesting it. Tap ↺ to put it back. Add up to 5 custom clubs with a name, type, carry and optional loft.
 - **Day and night themes.** Switch with the sun/moon button.
 - **Offline.** It works offline once loaded.
 

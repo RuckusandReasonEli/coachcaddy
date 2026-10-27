@@ -10,13 +10,15 @@ export const DEFAULT_BAG = [
   { id: '7i',  name: '7-iron',   kind: 'iron',   carry: 155, choked: 148 },
   { id: '8i',  name: '8-iron',   kind: 'iron',   carry: 145, choked: 138 },
   { id: '9i',  name: '9-iron',   kind: 'iron',   carry: 135, choked: 128 },
-  { id: 'PW',  name: 'PW',       kind: 'wedge',  carry: 120, choked: 114 },
-  { id: '52',  name: '52°',      kind: 'wedge',  carry: 105, choked: 99 },
-  { id: '56',  name: '56°',      kind: 'wedge',  carry: 90,  choked: 85 },
-  { id: '60',  name: '60°',      kind: 'wedge',  carry: 75,  choked: 70 },
+  { id: 'PW',  name: 'PW',         kind: 'wedge',  carry: 120, choked: 114, loft: 46 },
+  { id: '52',  name: 'Gap wedge',  kind: 'wedge',  carry: 105, choked: 99,  loft: 52 },
+  { id: '56',  name: 'Sand wedge', kind: 'wedge',  carry: 90,  choked: 85,  loft: 56 },
+  { id: '60',  name: 'Flop wedge', kind: 'wedge',  carry: 75,  choked: 70,  loft: 60 },
 ];
 
 // view: which target the logger shows. win: what counts as success for the recap.
+export const MAX_CUSTOM_CLUBS = 5;
+
 export const SHOT_TYPES = [
   { id: 'full',  name: 'Full swing', win: 'Solid and on line' },
   { id: 'tee',   name: 'Tee shot',   win: 'Fairway, no penalty', view: 'woods', tee: true, kinds: ['wood', 'hybrid'] },

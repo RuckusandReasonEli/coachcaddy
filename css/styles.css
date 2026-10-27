@@ -255,3 +255,30 @@ input[type=range] { width: 100%; accent-color: var(--brand); min-height: 32px; }
 .btn.next-shot[disabled] { opacity: .45; }
 .status.draft { background: var(--goldSoft); color: var(--goldInk); border-color: var(--gold); }
 .status.draft .muted { color: var(--goldInk); }
+
+/* My bag: lofts, remove/restore, custom clubs */
+:root, [data-theme="day"] { --red: #B3261E; --redSoft: #FBE7E5; }
+[data-theme="night"] { --red: #F2827A; --redSoft: #3A1F1D; }
+.bag-grid { grid-template-columns: minmax(0, 1fr) 52px 52px 74px 32px !important; gap: 6px !important; }
+.bag-head { display: grid; padding: 0 10px; }
+.club-row.bag-grid { padding: 6px 6px 6px 10px; }
+.club-row.bag-grid input { width: 52px; }
+.nm-cell { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.nm-cell .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.loft { display: inline-flex; align-items: center; gap: 2px; font-size: 13px; color: var(--ink2); }
+.club-row .loft input { width: 40px; min-height: 26px; font-size: 13px; padding: 0; }
+.x-btn { width: 32px; height: 32px; border-radius: 16px; border: 1.5px solid var(--line); background: transparent; color: var(--red); font-size: 20px; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0; cursor: pointer; }
+.x-btn.back-in { color: var(--brand); font-size: 17px; }
+.club-row.out { background: var(--redSoft); }
+.club-row.out .nm { color: var(--red); text-decoration: line-through; text-decoration-thickness: 2px; }
+.club-row.out input { color: var(--red); text-decoration: line-through; opacity: .7; background: transparent; }
+.club-row.out .loft { color: var(--red); }
+.out-note { font-size: 12px; color: var(--red); font-weight: 600; line-height: 1.3; }
+.link-btn { border: 0; background: none; padding: 0; color: var(--red); font: inherit; text-decoration: underline; cursor: pointer; }
+.club-form input[type=text], .club-form input[type=number] { min-height: 46px; font-size: 18px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--bg); color: var(--ink); padding: 0 12px; width: 100%; box-sizing: border-box; text-align: left; }
+.club-form .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.club-form .grid4 .chip { padding: 0 4px; font-size: 14px; justify-content: center; }
+.club-form .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.club-form .two label { display: flex; flex-direction: column; gap: 6px; }
+.bag-grid .locked .sess { display: none; }
+.bag-grid .locked { gap: 4px; }

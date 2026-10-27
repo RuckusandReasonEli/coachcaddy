@@ -299,7 +299,8 @@ export function reliability(state) {
     const score = Math.max(1, Math.min(99, Math.round(50 + (raw - overall) * R.spread)));
     out[c.id] = { locked: false, sessions: list.length, raw: Math.round(raw), score };
   });
-  const ranked = Object.entries(out).filter(([, v]) => !v.locked).sort((a, b) => b[1].score - a[1].score);
+  const outOfBag = new Set(state.bag.filter(c => c.out).map(c => c.id));
+  const ranked = Object.entries(out).filter(([id, v]) => !v.locked && !outOfBag.has(id)).sort((a, b) => b[1].score - a[1].score);
   ranked.slice(0, 3).forEach(([id]) => { out[id].top = true; });
   const rangeCount = range.length;
   return { clubs: out, anyUnlocked: ranked.length > 0, rangeSessions: rangeCount, overall: Math.round(overall) };
@@ -322,7 +323,7 @@ export function recommend(state, rel) {
   const slopeYds = sl.yds ? sl.yds[cad.steep ? 1 : 0] : 0;
   const playsLike = cad.target + (sf.yds || 0) + slopeYds;
   const excluded = c => (sf.exclude || []).some(x => x === c.kind || x === c.id) || (c.id === 'D' && cad.target < 220);
-  const eligible = state.bag.filter(c => !excluded(c)).map(c => ({ c, adj: adjustedCarry(c, cond, choke), r: rel.clubs[c.id] }))
+  const eligible = state.bag.filter(c => !c.out && !excluded(c)).map(c => ({ c, adj: adjustedCarry(c, cond, choke), r: rel.clubs[c.id] }))
     .filter(x => !sf.maxCarry || x.c.carry <= sf.maxCarry)
     .sort((a, b) => a.adj - b.adj);
 
