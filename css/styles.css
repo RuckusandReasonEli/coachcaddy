@@ -8,7 +8,7 @@
   --fair: #4A7F5B; --fair2: #508663; --rough: #2E5C43; --ob: #8E4A36;
   --putt: #A8CCA8; --putt2: #B4D4B2; --puttInk: #13231B;
   --ball: #FFFFFF; --sel: #E8B84A;
-  --hero: #1F5A43; --heroInk: #F6F3EA; --heroInk2: #CFE0D5;
+  --hero: #1F5A43; --heroInk: #F6F3EA; --heroInk2: #CFE0D5; --head: #184A37;
   --dim: rgba(19, 35, 27, 0.55); --grid: rgba(19, 35, 27, 0.055);
   color-scheme: light;
 }
@@ -21,7 +21,7 @@
   --fair: #3D7353; --fair2: #437A59; --rough: #1F3F2E; --ob: #713B2C;
   --putt: #2E5A42; --putt2: #336048; --puttInk: #EEF1EA;
   --ball: #F2F2EC; --sel: #E2B65A;
-  --hero: #16221C; --heroInk: #EEF1EA; --heroInk2: #A9B7AE;
+  --hero: #16221C; --heroInk: #EEF1EA; --heroInk2: #A9B7AE; --head: #173F2F;
   --dim: rgba(0, 0, 0, 0.6); --grid: rgba(238, 241, 234, 0.045);
   color-scheme: dark;
 }
@@ -222,3 +222,11 @@ input[type=range] { width: 100%; accent-color: var(--brand); min-height: 32px; }
 .yt { display: inline-flex; align-items: center; gap: 5px; font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 0; text-transform: none; color: var(--brand); background: var(--sf2); border: 1px solid var(--line); border-radius: 999px; padding: 4px 9px 4px 5px; text-decoration: none; white-space: nowrap; line-height: 1; min-height: 24px; }
 .yt.icon-only { padding: 5px; }
 .yt:active { transform: scale(.96); }
+
+/* Home masthead: full-bleed green band with the wordmark, buttons and tagline */
+.masthead { margin: calc(-1 * (env(safe-area-inset-top) + 16px)) -16px 0; padding: calc(env(safe-area-inset-top) + 16px) 16px 18px; background-color: var(--head); background-image: linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px); background-size: 24px 24px; border-radius: 0 0 24px 24px; display: flex; flex-direction: column; gap: 12px; color: #F6F3EA; }
+.masthead .wordmark { color: #F6F3EA; }
+.masthead .insignia { color: #E2B65A; }
+.masthead .tag { color: #CFE0D5; border-left-color: #E2B65A; }
+.masthead .round-btn, .masthead .pill-link { background: rgba(255,255,255,.10); border-color: rgba(255,255,255,.28); color: #F6F3EA; }
+.prompt { margin: 6px 0 0; text-align: center; font-family: 'Space Grotesk', sans-serif; font-size: 18px; font-weight: 600; letter-spacing: 0.02em; color: var(--ink2); }

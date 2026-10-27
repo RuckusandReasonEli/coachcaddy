@@ -78,6 +78,13 @@ function relRow(r, top) {
 }
 
 // ---------- home ----------
+// Sessions until the first club earns a rating (the club closest to unlocking sets the count).
+function relWait(rel) {
+  const best = Math.max(0, ...Object.values(rel.clubs).map(v => v.sessions || 0));
+  const left = Math.max(1, RELIABILITY.sessionsRequired - best);
+  return `Club reliability ratings calculated in ${left} more session${left === 1 ? '' : 's'}.`;
+}
+
 function home() {
   const st = S();
   const rel = reliability(st);
@@ -95,9 +102,11 @@ function home() {
   const c = st.conditions;
   const active = st.active ? `<a class="card hero" href="#/${st.active.kind}/log" style="text-decoration:none"><span class="lbl">In progress</span><span class="h2">Resume ${st.active.kind === 'range' ? 'range session' : st.active.kind === 'putt' ? 'putting session' : 'round'} ›</span></a>` : '';
   return `
-  <div class="top"><span class="wordmark">${insignia(40)}<span>COACH CADDY</span></span><span style="display:flex;gap:8px">${themeBtn()}<a class="pill-link" href="#/bag">My bag</a></span></div>
-  <p class="tag">${TAG}</p>
-  <h1>What’s today?</h1>
+  <header class="masthead">
+    <div class="top"><span class="wordmark">${insignia(40)}<span>COACH CADDY</span></span><span style="display:flex;gap:8px">${themeBtn()}<a class="pill-link" href="#/bag">My bag</a></span></div>
+    <p class="tag">${TAG}</p>
+  </header>
+  <p class="prompt">Practice or Play?</p>
   ${active}
   <a class="tile hero" href="#/practice">${golferGlyph(124, 'g-gold', 'var(--hero)')}
     <span class="lbl">Practice</span><h2>Range, putting or course</h2>
@@ -106,7 +115,7 @@ function home() {
     <span class="lbl">Play</span><h2>Caddy</h2>
     <span class="readout">${c.set ? `${c.temp}°F · ${c.moisture} · ${tempSummary(c)}` : 'Conditions, carries and every lie'}</span></a>
   ${top.length ? `<a class="card" href="#/bag" style="text-decoration:none;color:inherit"><span class="lbl">Most reliable right now</span><div class="chips">${top.map(([id, v]) => `<span class="chip gold" style="display:flex;align-items:center">★ ${esc(club(id).name)} ${v.score}</span>`).join('')}</div></a>`
-    : `<a class="card" href="#/bag" style="text-decoration:none;color:inherit"><span class="lbl">Club reliability</span><span class="muted">Unlocks after ${RELIABILITY.sessionsRequired} practice sessions with a club.</span></a>`}
+    : `<a class="card" href="#/bag" style="text-decoration:none;color:inherit"><span class="lbl">Club reliability</span><span class="muted">${relWait(rel)}</span></a>`}
   ${take}`;
 }
 
