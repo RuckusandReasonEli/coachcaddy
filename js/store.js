@@ -13,6 +13,7 @@ function fresh() {
     active: null,          // session in progress
     plan: null,            // saved "next time" plan
     conditions: { temp: 70, moisture: 'normal', elev: 0, difficulty: 'medium', set: false },
+    warmAuto: true,        // warm-up cards roll into the next move when the timer ends
     caddy: { target: 150, surface: 'fairway', slope: 'flat', steep: false, tab: 'sheet' },
   };
 }

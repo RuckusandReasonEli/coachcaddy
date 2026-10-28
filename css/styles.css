@@ -312,3 +312,23 @@ input[type=range] { width: 100%; accent-color: var(--brand); min-height: 32px; }
 .wu-thumb { flex: none; width: 48px; height: 48px; border-radius: 12px; background: var(--sf2); padding: 2px; display: flex; justify-content: center; }
 .wu-thumb .wu-fig { --halo: var(--sf2); width: auto; height: 100%; }
 .btn-row .wu-next { flex: none; width: 54px; padding: 0; font-size: 24px; }
+
+/* Warm-up: homepage access bar, card slides and the auto-advance checkbox */
+.warm-link { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 6px 14px 6px 8px; border: 1px solid var(--line); border-radius: 14px; background: var(--sf); color: var(--ink); text-decoration: none; }
+.warm-link svg { width: 36px; height: 36px; flex: none; }
+.warm-link .grow { flex: 1; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.warm-link b { font-family: 'Space Grotesk', sans-serif; font-size: 17px; font-weight: 600; }
+.warm-link .muted { font-size: 14px; }
+.warm-link .chev { font-size: 22px; }
+.wu-slide { display: flex; flex-direction: column; gap: 12px; }
+.wu-slide.from-r { animation: wuInR .22s ease-out; }
+.wu-slide.from-l { animation: wuInL .22s ease-out; }
+@keyframes wuInR { from { transform: translateX(28px); opacity: 0; } }
+@keyframes wuInL { from { transform: translateX(-28px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .wu-slide.from-r, .wu-slide.from-l { animation: none; } }
+.wu-dots span.past { background: var(--ink2); }
+.wu-auto { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 14px; border-radius: 14px; background: var(--sf2); cursor: pointer; }
+.wu-auto input { width: 22px; height: 22px; margin: 0; flex: none; accent-color: var(--brand); cursor: pointer; }
+.wu-auto .grow { flex: 1; display: flex; flex-direction: column; gap: 1px; }
+.wu-auto b { font-size: 15px; }
+.wu-auto .muted { font-size: 13px; }
