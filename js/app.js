@@ -5,10 +5,12 @@ import { viewFor, hitTest, curveFromPath, curveName, drawIrons, drawWoods, drawG
 import { describeShot, rangeRecap, puttRecap, courseRecap, reliability, recommend, adjustedCarry, tempSummary, drillById } from './engine.js';
 import { esc, insignia, caddyGlyph, golferGlyph, bagGlyph, sunIcon, moonIcon, lockIcon, checkOn, checkOff, scienceCard, science, drillGlyph, toast, ytLink, openYouTube, rangeScene, fairwayScene } from './ui.js';
 import { makeSample } from './sample.js';
+import { WARMUP, WARMUP_WORK as WORK, WARMUP_READY as READY } from './warmup.js';
 
 const app = document.getElementById('app');
 const TAG = 'Your data, your practice, your results: science-driven game improvement.';
 let ui = {};                       // transient screen state (selections, open sheets)
+let lastHash = null;               // render() resets the warm-up timer only when the route changes
 
 // ---------- theme ----------
 function applyTheme() {
@@ -32,11 +34,17 @@ function go(path) { location.hash = '#/' + path; }
 function render() {
   applyTheme();
   const r = route();
+  if (location.hash !== lastHash) {
+    lastHash = location.hash;
+    stopWarm(); wu.phase = 'idle';
+    if (r.a !== 'warmup' || !r.b) ui.wuAuto = false;
+  }
   closeOverlays();
   let html;
   switch (r.a) {
     case '': html = home(); break;
     case 'practice': html = practice(); break;
+    case 'warmup': html = r.b ? warmMove(r.b) : warmList(); break;
     case 'range': html = r.b === 'log' ? rangeLog() : r.b === 'recap' ? rangeRecapView(r.c) : rangePick(); break;
     case 'putt': html = r.b === 'log' ? puttLog() : r.b === 'recap' ? puttRecapView(r.c) : puttPick(); break;
     case 'course': html = r.b === 'recap' ? courseRecapView(r.c) : courseLog(); break;
@@ -54,6 +62,10 @@ function after(r) {
   if (r.a === 'range' && r.b === 'log') bindTarget('range');
   if (r.a === 'putt' && r.b === 'log') bindTarget('putt');
   if (r.a === 'caddy') bindSwipe();
+  if (r.a === 'warmup' && r.b) {
+    paintWarm();
+    if (ui.wuAuto && wu.phase === 'idle' && !wu.t) runWarm('ready', READY);
+  }
 }
 
 // ---------- helpers ----------
@@ -127,6 +139,7 @@ function practice() {
   <div class="top">${back('', 'Home')}${themeBtn()}</div>
   <div style="display:flex;align-items:center;gap:10px">${golferGlyph(46, 'g-brand')}<h1>Coach: Practice</h1></div>
   ${scienceCard('flight')}
+  <a class="row-link" href="#/warmup">${drillGlyph('stretch')}<span class="grow"><span class="name">Warm-up</span><span class="muted">5 moves, about 4 minutes</span></span><span class="chev">›</span></a>
   <a class="row-link" href="#/range">${drillGlyph('traj')}<span class="grow"><span class="name">Range</span><span class="muted">Drills, tap ball and grass</span></span><span class="chev">›</span></a>
   <a class="row-link" href="#/putt">${drillGlyph('pworld')}<span class="grow"><span class="name">Putting</span><span class="muted">Line, speed, pressure</span></span><span class="chev">›</span></a>
   <a class="row-link" href="#/course">${drillGlyph('flag')}<span class="grow"><span class="name">Course</span><span class="muted">Log a round, find the leaks</span></span><span class="chev">›</span></a>
@@ -134,6 +147,85 @@ function practice() {
   ${plan ? `<div class="card hero"><span class="lbl">Your plan${plan.from ? ' · ' + esc(plan.from) : ''}</span>
     <span>${plan.range && plan.range.length ? 'Range: ' + plan.range.map(id => esc(drillById(id).name)).join(', ') : ''}${plan.putt && plan.putt.length ? `<br>Putting: ${plan.putt.map(id => esc(drillById(id).name)).join(', ')}` : ''}</span>
     <div class="btn-row">${plan.range && plan.range.length ? '<a class="btn goldbtn" href="#/range">Range plan</a>' : ''}${plan.putt && plan.putt.length ? '<a class="btn sec" href="#/putt" style="border-color:var(--heroInk);color:var(--heroInk);background:transparent">Putting plan</a>' : ''}</div></div>` : ''}`;
+}
+
+// ---------- warm-up ----------
+// Five 45-second mobility moves. One move can be timed on its own, or the routine runs hands-free:
+// a 3-second get-ready, the move, then on to the next.
+let wu = { phase: 'idle', end: 0, ms: 0, left: WORK, t: null, lock: null };
+const fmtS = s => `${Math.floor(s / 60)}:${String(Math.round(s) % 60).padStart(2, '0')}`;
+const warmIdx = id => WARMUP.findIndex(m => m.id === id);
+const buzz = p => { try { if (navigator.vibrate) navigator.vibrate(p); } catch (e) {} };
+
+function stopWarm() {
+  clearInterval(wu.t); wu.t = null;
+  if (wu.lock) { wu.lock.release().catch(() => {}); wu.lock = null; }
+}
+function runWarm(phase, secs) {
+  stopWarm();
+  wu.phase = phase; wu.end = Date.now() + secs * 1000;
+  wu.t = setInterval(tickWarm, 200);
+  // Keep the screen awake while the timer runs, where the phone allows it.
+  try {
+    if (navigator.wakeLock) navigator.wakeLock.request('screen').then(l => { if (wu.t) wu.lock = l; else l.release().catch(() => {}); }).catch(() => {});
+  } catch (e) {}
+  tickWarm();
+}
+function tickWarm() {
+  const ms = Math.max(0, wu.end - Date.now());
+  wu.left = Math.ceil(ms / 1000);
+  if (ms <= 0 && wu.phase === 'ready') { buzz(60); runWarm('work', WORK); return; }
+  if (ms <= 0 && wu.phase === 'work') { buzz([120, 80, 120]); doneWarm(); return; }
+  paintWarm();
+}
+function doneWarm() {
+  stopWarm();
+  const next = WARMUP[warmIdx(route().b) + 1];
+  if (ui.wuAuto && next) { go('warmup/' + next.id); return; }
+  if (ui.wuAuto) { ui.wuAuto = false; toast('Warm-up done. Go hit some balls.'); go('warmup'); return; }
+  wu.phase = 'done'; wu.left = 0; paintWarm();
+}
+// Updates the timer pieces in place so the screen never re-renders mid-move.
+function paintWarm() {
+  const t = document.getElementById('wuTime'), f = document.getElementById('wuFill'), b = document.getElementById('wuGo');
+  if (!t) return;
+  const p = wu.phase;
+  t.textContent = p === 'ready' ? `Ready ${wu.left}` : fmtS(p === 'idle' ? WORK : wu.left);
+  t.classList.toggle('on', p === 'work' || p === 'ready');
+  const frac = p === 'work' ? 1 - (wu.end - Date.now()) / (WORK * 1000) : p === 'paused' ? 1 - wu.ms / (WORK * 1000) : p === 'done' ? 1 : 0;
+  if (f) f.style.width = `${Math.min(100, Math.max(0, frac * 100))}%`;
+  if (b) b.textContent = { idle: `Start ${fmtS(WORK)}`, ready: 'Start now', work: 'Pause', paused: `Resume ${fmtS(wu.left)}`, done: `Again ${fmtS(WORK)}` }[p];
+}
+
+function warmList() {
+  const mins = Math.round(WARMUP.length * (WORK + READY) / 60);
+  return `
+  <div class="top">${back('practice', 'Practice')}${themeBtn()}</div>
+  <h1>Pre-round warm-up</h1>
+  <p class="helper">Five moves, 45 seconds each, to wake up your hips, spine and shoulders before your first swing. Start the routine and it runs hands-free.</p>
+  <div class="stat-row"><div class="stat"><b>${WARMUP.length}</b><span>Moves</span></div><div class="stat"><b>${fmtS(WORK)}</b><span>Each</span></div><div class="stat"><b>${mins}</b><span>Minutes</span></div></div>
+  ${WARMUP.map((m, i) => `<a class="row-link" href="#/warmup/${m.id}"><span class="wu-thumb" aria-hidden="true">${m.frames[1].svg}</span><span class="grow"><span class="name">${i + 1}. ${esc(m.name)}</span><span class="muted">${esc(m.targets.join(', '))}</span></span><span class="chev">›</span></a>`).join('')}
+  <div class="spacer"></div>
+  <button class="btn pri" data-act="warmRoutine">Start routine</button>`;
+}
+
+function warmMove(id) {
+  const i = warmIdx(id);
+  if (i < 0) { go('warmup'); return ''; }
+  const m = WARMUP[i], next = WARMUP[i + 1];
+  return `
+  <div class="top">${back('warmup', 'Warm-up')}<span class="wu-dots" role="img" aria-label="Move ${i + 1} of ${WARMUP.length}">${WARMUP.map((_, j) => `<span class="${j <= i ? 'on' : ''}"></span>`).join('')}</span><span class="wu-time mono" id="wuTime">${fmtS(WORK)}</span></div>
+  <div class="wu-head"><span class="lbl">Move ${i + 1} of ${WARMUP.length}${ui.wuAuto ? ' · Routine' : ''}</span><h1>${esc(m.name)}</h1>
+    <div class="chips">${m.targets.map(t => `<span class="badge plain">${esc(t)}</span>`).join('')}</div>
+    <p class="helper">${esc(m.why)}</p></div>
+  <div class="wu-frames">${m.frames.map((f, j) => `<div class="wu-frame"><span class="lbl"><span class="n ${j ? 'go' : ''}">${j + 1}</span>${esc(f.label)}</span>${f.svg}</div>`).join('')}</div>
+  <div class="wu-bar" aria-hidden="true"><span id="wuFill"></span></div>
+  <ol class="wu-cues">${m.cues.map(c => `<li>${esc(c)}</li>`).join('')}</ol>
+  <div class="card soft"><span class="lbl t-gold">Coach tip</span><span>${esc(m.tip)}</span></div>
+  <div class="spacer"></div>
+  <div class="btn-row"><button class="btn pri" id="wuGo" data-act="warmGo">Start ${fmtS(WORK)}</button>${next
+    ? `<a class="btn sec wu-next" href="#/warmup/${next.id}" aria-label="Next move: ${esc(next.name)}">›</a>`
+    : `<a class="btn sec wu-next" href="#/warmup" aria-label="Finish warm-up">✓</a>`}</div>`;
 }
 
 // ---------- range: drill picker ----------
@@ -745,6 +837,15 @@ function bindSwipe() {
 
 // ---------- actions ----------
 const actions = {
+  warmRoutine: () => { ui.wuAuto = true; go('warmup/' + WARMUP[0].id); },
+  warmGo: () => {
+    if (wu.phase === 'work') {
+      wu.ms = Math.max(0, wu.end - Date.now()); wu.left = Math.ceil(wu.ms / 1000);
+      stopWarm(); wu.phase = 'paused'; paintWarm(); return;
+    }
+    if (wu.phase === 'paused') { runWarm('work', wu.ms / 1000); return; }
+    runWarm('work', WORK); // idle, done, or skipping the get-ready countdown
+  },
   theme: () => { update(s => { s.theme = s.theme === 'night' ? 'day' : 'night'; }); render(); },
   rangeCat: v => { ui.rangeCat = v; render(); },
   pickRange: v => { ui.rangePick.has(v) ? ui.rangePick.delete(v) : ui.rangePick.add(v); render(); },

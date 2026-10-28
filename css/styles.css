@@ -282,3 +282,33 @@ input[type=range] { width: 100%; accent-color: var(--brand); min-height: 32px; }
 .club-form .two label { display: flex; flex-direction: column; gap: 6px; }
 .bag-grid .locked .sess { display: none; }
 .bag-grid .locked { gap: 4px; }
+
+/* Warm-up routine: illustrations follow the theme through these classes */
+.wu-fig { display: block; width: 100%; height: auto; --halo: var(--sf); }
+.wu-fig .k { stroke: var(--ink); }
+.wu-fig .kf, .wu-fig .hf { fill: var(--ink); }
+.wu-fig .far { stroke: var(--ink2); stroke: color-mix(in srgb, var(--ink2) 55%, var(--sf)); }
+.wu-fig .ghost { stroke: var(--line); }
+.wu-fig .halo { stroke: var(--halo); }
+.wu-fig .hh { fill: var(--halo); }
+.wu-fig .arr { stroke: var(--gold); }
+.wu-fig .shade { fill: var(--sf2); }
+.wu-head { display: flex; flex-direction: column; gap: 6px; }
+.wu-frames { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.wu-frame { background: var(--sf); border: 1px solid var(--line); border-radius: 14px; padding: 10px 6px 6px; display: flex; flex-direction: column; gap: 4px; }
+.wu-frame .lbl { display: flex; align-items: center; gap: 6px; padding-left: 6px; color: var(--ink); }
+.wu-frame .n { width: 20px; height: 20px; border-radius: 10px; background: var(--ink); color: var(--bg); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; }
+.wu-frame .n.go { background: var(--gold); color: #13231B; }
+.wu-dots { display: flex; gap: 5px; }
+.wu-dots span { width: 18px; height: 4px; border-radius: 2px; background: var(--line); }
+.wu-dots span.on { background: var(--ink); }
+.wu-time { min-width: 84px; min-height: 36px; padding: 0 12px; border-radius: 18px; background: var(--sf); border: 1.5px solid var(--line); display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 600; white-space: nowrap; }
+.wu-time.on { background: var(--brand); border-color: var(--brand); color: var(--onBrand); }
+.wu-bar { height: 6px; border-radius: 3px; background: var(--sf2); overflow: hidden; }
+.wu-bar span { display: block; height: 100%; width: 0; background: var(--gold); border-radius: 3px; }
+.wu-cues { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; counter-reset: cue; }
+.wu-cues li { display: flex; gap: 12px; font-size: 15px; line-height: 1.4; }
+.wu-cues li::before { counter-increment: cue; content: counter(cue); flex: none; width: 24px; height: 24px; border-radius: 12px; background: var(--sf2); color: var(--ink); font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.wu-thumb { flex: none; width: 48px; height: 48px; border-radius: 12px; background: var(--sf2); padding: 2px; display: flex; justify-content: center; }
+.wu-thumb .wu-fig { --halo: var(--sf2); width: auto; height: 100%; }
+.btn-row .wu-next { flex: none; width: 54px; padding: 0; font-size: 24px; }

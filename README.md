@@ -8,6 +8,7 @@ Version 0.1, first working iteration.
 
 ## What's in it
 
+- **Pre-round warm-up.** Five illustrated mobility moves, 45 seconds each: Twist, Reverse Flys, Body Waves, Deep Squat Calf Raises and Standing Thoracic Rotations. Each move shows a start and a movement picture, three cues and a coach tip. Time a single move, or tap **Start routine** to run all five hands-free with a 3-second get-ready between moves. The screen stays awake while the timer runs where the phone allows it. Find it at the top of Practice.
 - **Range practice.** Pick from 18 drills, then log every ball on a ball-and-grass target. Tap the ball for contact and the grass for length and direction, or use the Contact, Length and Direction rows. Every part is optional; tap **Next shot** to save. The bottom row is the chunk zone, drag records curve, and carry yards are optional.
   - The target adapts to the club and shot type: irons show a pin, woods show a fairway with a tee, and pitches and chips show a green with rings.
 - **Putting practice.** 10 drills and a top-down hole logger. Tap the cup for a make or where the ball stopped, or pick distance (short or long) and direction. Lip outs are one tap. Tap **Next shot** to save. Breaking putts read as high side or low side.
@@ -55,6 +56,7 @@ Open **My bag** and tap **Try sample data** to load a few weeks of practice hist
 | `js/app.js` | Screens and navigation |
 | `js/store.js` | Local storage on the phone |
 | `js/sample.js` | Sample history |
+| `js/warmup.js` | Warm-up moves, cues and their illustrations (edit moves or timings here) |
 | `sw.js`, `manifest.webmanifest`, `icons/` | Offline support and home-screen install |
 
 ## Notes on the numbers
