@@ -332,3 +332,8 @@ input[type=range] { width: 100%; accent-color: var(--brand); min-height: 32px; }
 .wu-auto .grow { flex: 1; display: flex; flex-direction: column; gap: 1px; }
 .wu-auto b { font-size: 15px; }
 .wu-auto .muted { font-size: 13px; }
+
+/* Home: progress toward the first club reliability rating */
+.rel-meter { display: flex; gap: 6px; }
+.rel-meter span { flex: 1; height: 8px; border-radius: 4px; background: var(--sf2); }
+.rel-meter span.on { background: var(--gold); }

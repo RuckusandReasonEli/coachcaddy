@@ -8,7 +8,7 @@ import { makeSample } from './sample.js';
 import { WARMUP, WARMUP_WORK as WORK, WARMUP_READY as READY } from './warmup.js';
 
 const app = document.getElementById('app');
-const TAG = 'Your data, your practice, your results: science-driven game improvement.';
+const TAG = 'Your data, your practice, your results.';  // full line lives in index.html and the manifest
 let ui = {};                       // transient screen state (selections, open sheets)
 let lastHash = null;               // render() resets the warm-up timer only when the route changes
 
@@ -91,11 +91,13 @@ function relRow(r, top) {
 }
 
 // ---------- home ----------
-// Sessions until the first club earns a rating (the club closest to unlocking sets the count).
+// Progress toward the first reliability rating: the club closest to unlocking sets the count.
 function relWait(rel) {
-  const best = Math.max(0, ...Object.values(rel.clubs).map(v => v.sessions || 0));
-  const left = Math.max(1, RELIABILITY.sessionsRequired - best);
-  return `Club reliability ratings calculated in ${left} more session${left === 1 ? '' : 's'}.`;
+  const need = RELIABILITY.sessionsRequired;
+  const best = Math.min(need, Math.max(0, ...Object.values(rel.clubs).map(v => v.sessions || 0)));
+  const segs = Array.from({ length: need }, (_, i) => `<span class="${i < best ? 'on' : ''}"></span>`).join('');
+  return `<span class="rel-meter" role="img" aria-label="${best} of ${need} sessions">${segs}</span>
+    <span class="muted">${best} of ${need} sessions logged. Your first club rating unlocks at ${need}.</span>`;
 }
 
 function home() {
@@ -125,12 +127,12 @@ function home() {
   ${active}
   <a class="tile scene" href="#/practice">${rangeScene()}<span class="scrim"></span><span class="mat"></span>${golferGlyph(104, 'g-gold on-mat', '#276446')}
     <span class="lbl">Range · Putting · Course</span><h2 class="one-line">Coach: Practice</h2>
-    <span class="readout">${shots.length ? `${shots.length} shots · 30 days${solid != null ? ` · ${solid}% solid` : ""}` : 'Start logging to see your numbers'}</span></a>
+    <span class="readout">${shots.length ? `${shots.length} shots${solid != null ? ` · ${solid}% solid` : ''}` : 'Start logging to see your numbers'}</span></a>
   <a class="tile scene" href="#/play">${fairwayScene()}<span class="scrim"></span>${caddyGlyph(136, 'g-gold at-bottom', '#23603F')}
     <span class="lbl">On the course</span><h2 class="one-line">Caddy: Play</h2>
     <span class="readout">${c.set ? `${c.temp}°F · ${c.moisture} · ${tempSummary(c)}` : 'Conditions, carries and every lie'}</span></a>
   ${top.length ? `<a class="card" href="#/bag" style="text-decoration:none;color:inherit"><span class="lbl">Most reliable right now</span><div class="chips">${top.map(([id, v]) => `<span class="chip gold" style="display:flex;align-items:center">★ ${esc(club(id).name)} ${v.score}</span>`).join('')}</div></a>`
-    : `<a class="card" href="#/bag" style="text-decoration:none;color:inherit"><span class="lbl">Club reliability</span><span class="muted">${relWait(rel)}</span></a>`}
+    : `<a class="card" href="#/bag" style="text-decoration:none;color:inherit"><span class="lbl">Club reliability</span>${relWait(rel)}</a>`}
   ${take}`;
 }
 
