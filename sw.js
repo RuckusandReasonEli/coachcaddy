@@ -1,5 +1,5 @@
 // Offline support. Bump VERSION whenever you deploy changes so phones pick them up.
-const VERSION = 'cc-v0.2.0';
+const VERSION = 'cc-v0.3.0';
 const SHELL = [
   './', './index.html', './manifest.webmanifest', './css/styles.css', './css/fonts.css',
   './fonts/inter-latin-wght-normal.woff2', './fonts/space-grotesk-latin-wght-normal.woff2', './fonts/jetbrains-mono-latin-wght-normal.woff2',

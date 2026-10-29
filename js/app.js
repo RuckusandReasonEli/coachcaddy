@@ -1,9 +1,9 @@
 // Coach Caddy app: hash router and screens.
 import { S, update, uid, club, inBag, exportJSON, resetAll } from './store.js';
-import { SHOT_TYPES, RANGE_DRILLS, PUTT_DRILLS, SURFACES, SLOPES, DIFFICULTY, RELIABILITY, MAX_CUSTOM_CLUBS } from './data.js';
-import { viewFor, hitTest, curveFromPath, curveName, drawIrons, drawWoods, drawGreen, drawPutt, toViewBox } from './targets.js';
-import { describeShot, rangeRecap, puttRecap, courseRecap, reliability, recommend, adjustedCarry, tempSummary, drillById } from './engine.js';
-import { esc, insignia, caddyGlyph, golferGlyph, bagGlyph, sunIcon, moonIcon, lockIcon, checkOn, checkOff, scienceCard, science, drillGlyph, toast, ytLink, openYouTube, rangeScene, fairwayScene } from './ui.js';
+import { SHOT_TYPES, RANGE_DRILLS, PUTT_DRILLS, SURFACES, SLOPES, DIFFICULTY, RELIABILITY, MAX_CUSTOM_CLUBS, BASIC, LADDER_YDS, CLOCK, NINE_SEQ, PLAY9_HOLES } from './data.js';
+import { viewFor, hitTest, curveFromPath, curveName, drawIrons, drawWoods, drawGreen, drawPutt, toViewBox, drawCarry, carryHit, drawFace, faceHit, shapeGlyph } from './targets.js';
+import { describeShot, finishWords, rangeRecap, puttRecap, courseRecap, reliability, recommend, adjustedCarry, tempSummary, drillById, drillScores, clubTable, gapSuggest } from './engine.js';
+import { esc, insignia, caddyGlyph, golferGlyph, bagGlyph, sunIcon, moonIcon, lockIcon, checkOn, checkOff, scienceCard, science, drillGlyph, toast, ytLink, openYouTube, rangeScene, fairwayScene, clubShort } from './ui.js';
 import { makeSample } from './sample.js';
 import { WARMUP, WARMUP_WORK as WORK, WARMUP_READY as READY } from './warmup.js';
 
@@ -72,7 +72,7 @@ function render() {
 }
 
 function after(r) {
-  if (r.a === 'range' && r.b === 'log') bindTarget('range');
+  if (r.a === 'range' && r.b === 'log') { bindTarget('range'); bindRail(); }
   if (r.a === 'putt' && r.b === 'log') bindTarget('putt');
   if (r.a === 'caddy') bindSwipe();
   if (r.a === 'warmup' && r.b) {
@@ -288,6 +288,15 @@ function bindWarmSwipe(id) {
 }
 
 // ---------- range: drill picker ----------
+const TRACKER_NAME = { full: 'Full-swing tracker', carry: 'Distance tracker', shape: 'Shape tracker', strike: 'Strike map', play9: 'Play 9' };
+function basicCard() {
+  const last = S().sessions.filter(s => s.kind === 'range' && s.basic).sort((x, y) => y.ended - x.ended)[0];
+  const clubs = last ? [...new Set(last.shots.map(s => s.club))].map(id => clubShort(club(id))).join(', ') : '';
+  return `<div class="card hero basic-card"><span class="lbl">Basic range session</span><span class="h2">Just hit balls</span>
+    <span class="muted">No drill and no ball count. Pick a club, log what happened, switch clubs whenever you like.</span>
+    <button class="btn goldbtn" data-act="startBasic">Start basic session</button>
+    ${last ? `<span class="mono basic-last">Last time · ${fmtDate(last.ended)} · ${last.shots.length} balls · ${esc(clubs)}</span>` : ''}</div>`;
+}
 function rangePick() {
   if (!ui.rangePick) ui.rangePick = new Set((S().plan && S().plan.range) || ['gate', 'line', 'ladder']);
   const cat = ui.rangeCat || 'All';
@@ -297,14 +306,15 @@ function rangePick() {
   const balls = RANGE_DRILLS.filter(d => ui.rangePick.has(d.id)).reduce((a, d) => a + d.balls, 0);
   return `
   <div class="top">${back('practice', 'Practice')}${themeBtn()}</div>
-  <h1>Range session</h1>
+  <h1>Range</h1>
   <div class="scroll-y" data-keep="rpick">
-  ${scienceCard('lowpoint')}
+  ${basicCard()}
+  <div class="or-row"><span class="lbl">Or work a drill</span><i></i></div>
   <div class="chips scroll sticky-chips">${cats.map(c => `<button class="chip ${c === cat ? 'on' : ''}" data-act="rangeCat" data-v="${c}">${c}</button>`).join('')}</div>
   ${list.map(d => {
     const on = ui.rangePick.has(d.id);
     return `<div class="drill ${on ? 'on' : ''}" role="button" tabindex="0" data-act="pickRange" data-v="${d.id}" aria-pressed="${on}">${drillGlyph(d.glyph)}
-      <span class="grow"><span class="name-row"><span class="name">${esc(d.name)}</span>${ytLink(d)}</span><span class="meta">${esc(d.trains)} · ${d.balls} balls · ${esc(club(d.club).name)}, ${esc(shotType(d.type).name.toLowerCase())}</span>${on ? `<span class="how">${esc(d.how)}</span>` : ''}</span>${on ? checkOn : checkOff}</div>`;
+      <span class="grow"><span class="name-row"><span class="name">${esc(d.name)}</span>${ytLink(d)}</span><span class="meta">${esc(d.trains)} · ${d.balls} balls · ${esc(club(d.club).name)}, ${esc(shotType(d.type).name.toLowerCase())}</span><span class="meta tracker-tag">${TRACKER_NAME[d.tracker || 'full']}${d.check ? ' · drill check' : ''}</span>${on ? `<span class="how">${esc(d.how)}</span>` : ''}</span>${on ? checkOn : checkOff}</div>`;
   }).join('')}
   </div>
   <div class="bar"><button class="btn pri" data-act="startRange" ${n ? '' : 'disabled style="opacity:.5"'}>Start · ${n} drill${n === 1 ? '' : 's'} · ${balls} balls</button></div>`;
@@ -313,10 +323,20 @@ function rangePick() {
 // ---------- range: logger ----------
 function currentDrill(a) { return drillById(a.drills[a.di]) || RANGE_DRILLS[0]; }
 function drillShots(a) { const d = currentDrill(a); return a.shots.filter(s => s.drill === d.id); }
+const shotsFor = (a, d) => a.shots.filter(s => s.drill === d.id);
+const trackerOf = a => currentDrill(a).tracker || 'full';
+const capWord = w => w ? w[0].toUpperCase() + w.slice(1) : w;
+const avgCarry = xs => Math.round(xs.reduce((t, s) => t + s.carry, 0) / xs.length);
+
+// Which target the logger draws. Play 9 approaches always aim at a green.
+function logView(a) {
+  if (trackerOf(a) === 'play9') { const n = p9Now(a); return n && n.phase === 'approach' ? 'irons' : 'woods'; }
+  return viewFor(club(a.club).kind, a.type);
+}
 
 function targetSvg(a) {
   const cl = club(a.club);
-  const view = viewFor(cl.kind, a.type);
+  const view = logView(a);
   const shots = drillShots(a).filter(s => s.view === view);
   const pd = a.pending || {};
   const pt = pd.x != null ? pd : null;
@@ -327,7 +347,7 @@ function targetSvg(a) {
 
 // ---------- shot draft (range) ----------
 // A shot is built up from optional parts and saved with Next shot.
-function hasDraft(pd) { return !!(pd && (pd.contact || pd.row || pd.col || pd.holed || pd.curve || pd.height || pd.carry != null)); }
+function hasDraft(pd) { return !!(pd && (pd.contact || pd.row || pd.col || pd.holed || pd.curve || pd.height || pd.carry != null || pd.check != null || pd.got || pd.face)); }
 function draftPart(pd) {
   const finish = (pd.row || pd.col || pd.holed)
     ? { row: pd.row || null, col: pd.col || null, ...(pd.ft != null ? { ft: pd.ft, dx: pd.dx, dy: pd.dy } : {}), ...(pd.holed ? { holed: true } : {}) }
@@ -335,40 +355,285 @@ function draftPart(pd) {
   return { contact: pd.contact || null, finish, curve: pd.curve || null, carry: pd.carry != null ? pd.carry : null, x: pd.x != null ? pd.x : null, y: pd.y != null ? pd.y : null };
 }
 const OUT_CONTACT = [['pure', 'Pure'], ['thin', 'Thin'], ['chunk', 'Chunk', 'Fat'], ['heel', 'Heel'], ['toe', 'Toe']];
+const DIR3 = [['left', 'Left'], ['line', 'On line'], ['right', 'Right']];
 function outRow(label, act, opts, cur) {
   return `<div class="out-row"><span class="lbl">${label}</span><div class="out-chips" style="--n:${opts.length}">${opts.map(([v, txt, short]) =>
     `<button class="chip sq ${cur === v ? 'on' : ''}" data-act="${act}" data-v="${v}" aria-pressed="${cur === v}" aria-label="${txt}">${short ? (v === 'chunk' ? `<span class="xs-hide">${txt}</span><span class="xs-only">${short}</span>` : `<span class="wide-only">${txt}</span><span class="narrow-only">${short}</span>`) : txt}</button>`).join('')}</div></div>`;
 }
 
 // Logger header: End, drill name (truncates), progress, and next drill, all in one row.
-function logTop(endAct, d, progress, nextAct, more) {
+function logTop(endAct, d, progress, nextAct, more, nextLabel) {
   return `<div class="logtop"><button class="back" data-act="${endAct}">End</button>
-    <div class="lt-mid"><span class="lt-line"><span class="lt-name">${esc(d.name)}</span>${ytLink(d, true)}</span><span class="lt-sub">${progress}</span></div>
-    <button class="back lt-next" data-act="${nextAct}">${more ? 'Next drill ›' : 'Finish ›'}</button></div>`;
+    <div class="lt-mid"><span class="lt-line"><span class="lt-name">${esc(d.name)}</span>${d.id === 'basic' ? '' : ytLink(d, true)}</span><span class="lt-sub">${progress}</span></div>
+    <button class="back lt-next" data-act="${nextAct}">${nextLabel || (more ? 'Next drill ›' : 'Finish ›')}</button></div>`;
+}
+
+// ---------- club rail ----------
+// The bag in one swipeable row: one tap changes club; touch and hold opens the full bag.
+const TYPE_SHORT = { full: 'Full', tee: 'Tee', draw: 'Draw', fade: 'Fade', punch: 'Punch', high: 'High', three: '¾', pitch: 'Pitch', chip: 'Chip' };
+function clubRail(a, d, counts) {
+  const rel = reliability(S()).clubs;
+  const chips = inBag().map(c => {
+    const r = rel[c.id], top = r && r.top, on = c.id === a.club, n = counts && counts[c.id];
+    return `<button class="rail-club${on ? ' on' : ''}${top && !on ? ' top' : ''}" data-act="railClub" data-v="${c.id}" aria-pressed="${on}" aria-label="${esc(c.name)}, ${c.carry} yards${top ? ', most reliable' : ''}${n ? `, ${n} balls` : ''}"><b>${top ? '★' : ''}${esc(clubShort(c))}</b><span>${c.carry}</span>${c.id === d.club && d.id !== 'basic' ? '<i class="rail-dot" aria-hidden="true"></i>' : ''}${n ? `<em>${n}</em>` : ''}</button>`;
+  }).join('');
+  return `<div class="rail-row"><button class="type-chip" data-act="openShotSetup" aria-label="Swing: ${esc(shotType(a.type).name)}. Opens the full bag.">${esc(TYPE_SHORT[a.type] || shotType(a.type).name)} <span aria-hidden="true">▾</span></button><div class="rail" data-rail role="group" aria-label="Clubs. Touch and hold for the full bag.">${chips}</div></div>`;
+}
+function bindRail() {
+  const rail = app.querySelector('[data-rail]');
+  if (!rail) return;
+  const on = rail.querySelector('.rail-club.on');
+  if (on) rail.scrollLeft += on.getBoundingClientRect().left - rail.getBoundingClientRect().left - (rail.clientWidth - on.offsetWidth) / 2;
+  let t = null;
+  rail.addEventListener('pointerdown', () => { clearTimeout(t); ui.railHeld = false; t = setTimeout(() => {
+    ui.railHeld = true; ui.holdUp = 0; openOverlay(shotSetupSheet());
+    // The finger lifts over the new sheet: swallow that one click so it can't close the sheet or pick a tile.
+    document.addEventListener('pointerup', () => { ui.holdUp = Date.now(); }, { once: true, capture: true });
+  }, 520); });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => rail.addEventListener(ev, () => clearTimeout(t)));
+  rail.addEventListener('scroll', () => clearTimeout(t), { passive: true });
+}
+// Changing club keeps what you've marked, except a spot on a target that no longer applies.
+function chooseClub(v) {
+  update(s => {
+    const a = s.active, d = currentDrill(a), before = logView(a), k = club(v).kind;
+    a.club = v;
+    if (a.type === 'tee' && !['wood', 'hybrid'].includes(k)) a.type = 'full';
+    if ((a.type === 'pitch' || a.type === 'chip') && k !== 'wedge') a.type = 'full';
+    if (logView(a) !== before && a.pending) Object.assign(a.pending, { x: null, y: null, row: null, col: null, ft: null, dx: null, dy: null, holed: false });
+    if (d.tracker !== 'play9' && d.mode !== 'onedist') s.lastClub = { ...(s.lastClub || {}), [d.id]: v };
+  });
+}
+// The club and swing a drill starts with (Play 9 and One yardage choose for you).
+function drillStartClub(a, d) {
+  if (d.tracker === 'play9') { const now = p9Now(a); return now ? { club: p9Pick(now), type: now.phase === 'tee' ? 'tee' : 'full' } : { club: a.club, type: 'full' }; }
+  if (d.mode === 'onedist') return oneDistPlan(d)[shotsFor(a, d).length % 3];
+  const last = (S().lastClub || {})[d.id];
+  return { club: last && inBag().some(c => c.id === last) ? last : d.club, type: d.type };
+}
+
+function checkRow(q, cur) {
+  return `<div class="check-row"><div class="check-q"><span class="lbl">Drill check · optional</span><b>${esc(q)}</b></div><div class="check-btns">
+    <button class="chip sq ${cur === true ? 'on' : ''}" data-act="drillCheck" data-v="yes" aria-pressed="${cur === true}">✓ Yes</button>
+    <button class="chip sq ${cur === false ? 'on' : ''}" data-act="drillCheck" data-v="no" aria-pressed="${cur === false}">✗ No</button></div></div>`;
+}
+
+// Basic session: how the selected club is going today.
+function clubToday(a) {
+  const cl = club(a.club);
+  const mine = a.shots.filter(s => s.club === cl.id);
+  if (!mine.length) return `<div class="club-today"><div><span class="lbl">${esc(cl.name)} today</span><b>No balls yet</b><span class="muted">Switch clubs any time on the rail</span></div></div>`;
+  const withC = mine.filter(s => s.contact);
+  const solid = withC.length ? Math.round(withC.filter(s => ['pure', 'solid'].includes(s.contact)).length / withC.length * 100) : null;
+  const dirs = { left: 0, right: 0 };
+  mine.forEach(s => { const c = s.finish && s.finish.col; if (c === 'left' || c === 'obL') dirs.left++; if (c === 'right' || c === 'obR') dirs.right++; });
+  const lean = dirs.left >= 2 && dirs.left > dirs.right ? `Misses lean left (${dirs.left} of ${mine.length})` : dirs.right >= 2 && dirs.right > dirs.left ? `Misses lean right (${dirs.right} of ${mine.length})` : 'No clear miss yet';
+  const dots = mine.filter(s => s.x != null && (s.view === 'irons' || s.view === 'woods')).map(s => {
+    const miss = s.finish && s.finish.col && s.finish.col !== 'line';
+    return `<circle cx="${(s.x / 358 * 96).toFixed(1)}" cy="${(s.y / 430 * 56).toFixed(1)}" r="2.6" fill="${miss ? '#E2B65A' : '#FFFFFF'}"/>`;
+  }).join('');
+  return `<div class="club-today"><div><span class="lbl">${esc(cl.name)} today</span><b>${mine.length} ball${mine.length === 1 ? '' : 's'}${solid != null ? ` · ${solid}% solid` : ''}</b><span class="muted">${lean}</span></div>
+    <svg width="96" height="56" viewBox="0 0 96 56" role="img" aria-label="Where ${esc(cl.name)} shots finished today"><rect width="96" height="56" rx="8" class="t-grass"/><line x1="48" y1="3" x2="48" y2="53" stroke="#FFFFFF" stroke-opacity=".35" stroke-dasharray="3 3"/>${dots}</svg></div>`;
+}
+
+// ---------- distance tracker ----------
+function oneDistPlan(d) {
+  const base = club(d.club);
+  const longer = inBag().filter(c => c.carry > base.carry).sort((x, y) => x.carry - y.carry);
+  return [{ club: base.id, type: 'full' }, { club: (longer[0] || base).id, type: 'three' }, { club: (longer[1] || longer[0] || base).id, type: 'punch' }];
+}
+function clockFace(angle, on) {
+  const r = angle * Math.PI / 180, x = 32 + 24 * Math.cos(r), y = 32 + 24 * Math.sin(r);
+  return `<svg width="56" height="56" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="28" class="${on ? 'f-sf' : 'f-sf2'}"/><g class="s-ink2" stroke-width="2" stroke-linecap="round"><line x1="32" y1="6" x2="32" y2="10"/><line x1="58" y1="32" x2="54" y2="32"/><line x1="32" y1="58" x2="32" y2="54"/><line x1="6" y1="32" x2="10" y2="32"/></g><line x1="32" y1="32" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" class="${on ? 's-brand' : 's-ink'}" stroke-width="4" stroke-linecap="round"/><circle cx="32" cy="32" r="4" class="${on ? 'f-brand' : 'f-ink'}"/></svg>`;
+}
+function carryCtx(a, d) {
+  const shots = shotsFor(a, d), n = shots.length, pd = a.pending || {}, cl = club(a.club);
+  if (d.mode === 'ladder') {
+    const i = n % LADDER_YDS.length, target = LADDER_YDS[i];
+    return { target, label: 'Target ladder · steps up each ball', ghosts: shots,
+      sel: `<div class="ladder">${LADDER_YDS.map((y, j) => `<span class="rung${j < i ? ' done' : ''}${j === i ? ' on' : ''}">${y}${j < i ? ' ✓' : ''}</span>`).join('')}</div>`,
+      next: `Next · ${LADDER_YDS[(i + 1) % LADDER_YDS.length]} yds ›` };
+  }
+  if (d.mode === 'clock') {
+    const len = pd.swing || CLOCK[n % CLOCK.length].id;
+    const mineFor = id => shots.filter(s => s.club === cl.id && s.swing === id && s.carry != null);
+    const L = CLOCK.find(c => c.id === len);
+    const target = mineFor(len).length ? avgCarry(mineFor(len)) : Math.round(cl.carry * L.share);
+    const ang = { 730: 135, 900: 180, 1030: 225 };
+    return { target, label: 'Backswing length · lead arm points to', ghosts: mineFor(len), swing: len,
+      sel: `<div class="clock-pick">${CLOCK.map(c => { const xs = mineFor(c.id), on = c.id === len; return `<button class="clock-btn${on ? ' on' : ''}" data-act="clockLen" data-v="${c.id}" aria-pressed="${on}">${clockFace(ang[c.id], on)}<b>${c.name}</b><span>${xs.length ? `avg ${avgCarry(xs)}` : 'new'}</span></button>`; }).join('')}</div>`,
+      next: 'Next shot ›' };
+  }
+  if (d.mode === 'grip') {
+    const grip = pd.grip || (n % 2 ? 'choked' : 'full');
+    const target = grip === 'choked' ? cl.choked : cl.carry;
+    return { target, label: 'This ball · grip', grip, ghosts: shots.filter(s => s.club === cl.id && s.grip === grip),
+      sel: `<div class="seg grip-seg">${[['full', 'Full grip'], ['choked', 'Choked 1 in']].map(([v, t]) => `<button class="${grip === v ? 'on' : ''}" data-act="gripSel" data-v="${v}" aria-pressed="${grip === v}">${t}</button>`).join('')}</div>`,
+      next: `Next · ${grip === 'full' ? 'choked' : 'full grip'} ›` };
+  }
+  const plan = oneDistPlan(d), i = n % 3, target = club(d.club).carry;
+  const sw = { full: 'full', three: '¾', punch: 'punch' };
+  return { target, label: `One target · ${target} yds`, ghosts: shots,
+    sel: `<div class="ladder">${plan.map((p, j) => `<span class="rung${j < i ? ' done' : ''}${j === i ? ' on' : ''}">${esc(clubShort(club(p.club)))} ${sw[p.type]}</span>`).join('')}</div>`,
+    next: `Next · ${clubShort(club(plan[(i + 1) % 3].club))} ${sw[plan[(i + 1) % 3].type]} ›` };
+}
+function carryBody(a, d, pd) {
+  const cx = carryCtx(a, d);
+  const ghosts = cx.ghosts.filter(s => s.carry != null && s.target != null).map(s => ({ dy: s.carry - s.target, lx: s.lx != null ? s.lx : 201 }));
+  const pt = pd.carry != null ? { carry: pd.carry, lx: pd.lx != null ? pd.lx : 201 } : null;
+  const diff = pd.carry != null ? pd.carry - cx.target : null;
+  const verdict = diff == null ? '' : Math.abs(diff) <= 5 ? `<span class="verdict ok">${diff > 0 ? '+' : ''}${diff} · on the number</span>` : `<span class="verdict off">${diff > 0 ? '+' : ''}${diff} · ${diff > 0 ? 'long' : 'short'}</span>`;
+  return { cx, html: `
+  <div class="sel-block"><span class="lbl">${cx.label}</span>${cx.sel}</div>
+  <div class="target-wrap">${drawCarry(cx.target, ghosts, pt)}</div>
+  <div class="carry-read"><button class="step" data-act="carryStep" data-v="-1" aria-label="One yard shorter">−</button>
+    <div class="carry-num"><span class="big">${pd.carry != null ? pd.carry : '–'} <small>yds carry</small></span>${verdict || `<span class="muted">Tap where it landed · target ${cx.target}</span>`}</div>
+    <button class="step" data-act="carryStep" data-v="1" aria-label="One yard longer">+</button></div>
+  <div class="outcome">${outRow('Contact', 'setContact', OUT_CONTACT, pd.contact)}</div>` };
+}
+
+// ---------- shape tracker ----------
+const SHAPE_H = ['high', 'mid', 'low'], SHAPE_C = ['draw', 'none', 'fade'];
+const shapeWords = (h, c) => `${h} ${c === 'none' ? 'straight' : c}`;
+function shapePlan(a, d) { const n = shotsFor(a, d).length; return d.mode === 'punch' ? ['low', 'none'] : NINE_SEQ[n % 9]; }
+function shapeBody(a, d, pd) {
+  const plan = shapePlan(a, d), hand = S().hand, shots = shotsFor(a, d);
+  const cycle = d.mode === 'nine' ? shots.slice(shots.length - (shots.length % 9)) : [];
+  const head = `<div class="shape-head"><span></span>${SHAPE_C.map(c => `<span class="lbl">${c === 'none' ? 'Straight' : capWord(c)}</span>`).join('')}</div>`;
+  const rows = SHAPE_H.map(h => `<div class="shape-row"><span class="lbl">${capWord(h)}</span>${SHAPE_C.map(c => {
+    const planned = plan[0] === h && plan[1] === c, got = pd.got && pd.got.h === h && pd.got.c === c;
+    const past = cycle.find(s => s.plan && s.plan.h === h && s.plan.c === c);
+    const mark = past ? `<i class="shape-mark ${past.matched ? 'yes' : 'no'}">${past.matched ? '✓' : '✗'}</i>` : '';
+    return `<button class="shape-cell${planned ? ' planned' : ''}${got ? ' got' : ''}" data-act="shapeGot" data-v="${h}-${c}" aria-pressed="${!!got}" aria-label="${shapeWords(h, c)}${planned ? ', planned' : ''}">${shapeGlyph(h, c, hand)}${got ? '<span class="tag">Hit</span>' : planned ? '<span class="tag">Planned</span>' : ''}${mark}</button>`;
+  }).join('')}</div>`).join('');
+  let status = `This ball: ${shapeWords(plan[0], plan[1])}`, verdict = '';
+  if (pd.got) {
+    const hOk = pd.got.h === plan[0], cOk = pd.got.c === plan[1];
+    status = hOk && cOk ? `Hit the ${shapeWords(plan[0], plan[1])}` : `Hit ${shapeWords(pd.got.h, pd.got.c)}`;
+    verdict = hOk && cOk ? 'Matched' : !hOk && !cOk ? 'Both off' : hOk ? 'Curve off' : 'Height off';
+  }
+  return `
+  <div class="status${pd.got ? ' draft' : ''}" aria-live="polite"><span>${capWord(status)}</span><span class="muted">${verdict}</span></div>
+  <div class="shape-grid">${head}${rows}</div>
+  <p class="helper">Tap the box the ball actually flew. Tap the gold box when it matched.</p>
+  <div class="outcome">${outRow('Start line', 'setDir', DIR3, pd.col)}${outRow('Contact', 'setContact', OUT_CONTACT, pd.contact)}</div>`;
+}
+
+// ---------- strike map ----------
+const faceWords = f => f.h === 'center' && f.v === 'mid' ? 'Center' : `${capWord(f.h)}, ${f.v}`;
+const faceContact = f => f.h === 'heel' ? 'heel' : f.h === 'toe' ? 'toe' : f.v === 'low' ? 'thin' : f.v === 'high' ? 'under' : 'pure';
+function strikeBody(a, d, pd) {
+  const faces = shotsFor(a, d).filter(s => s.face).map(s => s.face);
+  const last = faces.slice(-6), k = h => last.filter(f => f.h === h).length;
+  let insight = '';
+  if (last.length >= 3) {
+    const heel = k('heel'), toe = k('toe'), center = k('center');
+    insight = heel >= 3 && heel > toe ? `<b>${heel} of the last ${last.length} toward the heel</b><span>Heel strikes often come from the hands drifting out at the ball. Feet together is the follow-up drill.</span>`
+      : toe >= 3 && toe > heel ? `<b>${toe} of the last ${last.length} toward the toe</b><span>Toe strikes often come from standing up or reaching. Feet together helps here too.</span>`
+      : `<b>${center} of the last ${last.length} in the center</b><span>Keep the same setup and tempo.</span>`;
+    insight = `<div class="insight">${insight}</div>`;
+  }
+  return `
+  <div class="status${pd.face ? ' draft' : ''}" aria-live="polite"><span>${pd.face ? esc(faceWords(pd.face)) + (pd.col ? ` · started ${pd.col === 'line' ? 'on line' : pd.col}` : '') : 'Tap the powder mark'}</span><span class="muted">${pd.face ? 'This shot' : `${faces.length} logged`}</span></div>
+  <div class="target-wrap">${drawFace(S().hand, faces, pd.face)}</div>
+  ${insight}
+  <div class="outcome">${outRow('Flight', 'setDir', DIR3, pd.col)}</div>`;
+}
+
+// ---------- Play 9 on the range ----------
+// The round is worked out from the shots logged, so Undo always puts you back on the right hole.
+function p9Carry(s) {
+  let c = s.carry != null ? s.carry : club(s.club).carry;
+  const row = s.finish && s.finish.row;
+  if (row === 'long') c += 10; if (row === 'short') c -= 15;
+  c -= { chunk: 30, top: 80, skied: 60, thin: 10, shank: 100 }[s.contact] || 0;
+  return Math.max(20, c);
+}
+function p9Now(a) {
+  const shots = a.shots.filter(s => s.drill === 'play9');
+  let i = 0;
+  for (let h = 0; h < PLAY9_HOLES.length; h++) {
+    const H = PLAY9_HOLES[h], n = H.par - 2;
+    let left = H.yds;
+    for (let k = 0; k < n; k++) {
+      const phase = k === n - 1 ? 'approach' : k === 0 ? 'tee' : 'layup';
+      if (i < shots.length) { left = Math.max(30, left - p9Carry(shots[i])); i++; continue; }
+      return { h, k, n, H, phase, left: Math.round(left / 5) * 5, hole: shots.slice(i - k, i) };
+    }
+  }
+  return null;
+}
+function p9Pick(now) {
+  const bag = inBag().slice().sort((x, y) => x.carry - y.carry), rel = reliability(S()).clubs;
+  const longest = bag[bag.length - 1], noD = bag.filter(c => c.id !== 'D');
+  if (now.phase === 'tee') return (bag.find(c => c.id === 'D') || longest).id;
+  if (now.phase === 'layup') { const fit = noD.filter(c => c.carry <= now.left - 40); return (fit[fit.length - 1] || noD[noD.length - 1] || longest).id; }
+  const pool = now.left > 225 ? bag : noD;
+  let pick = pool.find(c => c.carry >= now.left - 3) || pool[pool.length - 1] || longest;
+  const score = c => (rel[c.id] && !rel[c.id].locked ? rel[c.id].score : 0);
+  const alt = pool.filter(c => c.carry >= now.left - 3 && c.carry <= now.left + 12 && score(c) >= score(pick) + 8).sort((x, y) => score(y) - score(x))[0];
+  return (alt || pick).id;
+}
+function p9Pips(a) {
+  const shots = a.shots.filter(s => s.drill === 'play9');
+  return `<div class="p9-pips" role="img" aria-label="Fairways and greens by hole">${PLAY9_HOLES.map((H, h) => {
+    const mine = shots.filter(s => s.hole === h + 1);
+    const tee = mine.find(s => s.phase === 'tee'), app_ = mine.find(s => s.phase === 'approach');
+    const fw = H.par === 3 ? 'na' : !tee ? '' : tee.finish && tee.finish.col === 'line' ? 'hit' : 'miss';
+    const gr = !app_ ? '' : app_.finish && app_.finish.row === 'pin' && app_.finish.col === 'line' ? 'hit' : 'miss';
+    return `<span><b>${h + 1}</b><i class="${fw}"></i><i class="${gr} g"></i></span>`;
+  }).join('')}</div>`;
+}
+function play9Card(a, now) {
+  const phaseName = { tee: 'Tee shot', layup: 'Lay-up', approach: 'Approach' };
+  const steps = [];
+  for (let k = 0; k < now.n; k++) {
+    const ph = k === now.n - 1 ? 'approach' : k === 0 ? 'tee' : 'layup';
+    const done = now.hole[k];
+    steps.push(`<span class="p9-step${done ? ' done' : k === now.k ? ' on' : ''}"><i>${done ? '✓' : k + 1}</i>${phaseName[ph]}${done ? ` · ${esc(clubShort(club(done.club)))}${done.finish && done.finish.col ? ' · ' + esc(finishWords(done)) : ''}` : k === now.k ? (ph === 'approach' ? ` · ${now.left} to the pin` : ` · ${now.left} to go`) : ''}</span>`);
+  }
+  const pick = club(p9Pick(now));
+  const note = a.club === pick.id ? `Caddy picked ${esc(pick.name)}: ${pick.carry} carry.` : `You picked ${esc(club(a.club).name)}. Caddy would use ${esc(pick.name)}.`;
+  return `<div class="p9-card"><div class="p9-top"><b>Hole ${now.h + 1} · Par ${now.H.par} · ${now.H.yds}</b><span>${note}</span></div><div class="p9-steps">${steps.join('')}</div>${p9Pips(a)}</div>`;
 }
 
 function rangeLog() {
   const a = S().active;
   if (!a || a.kind !== 'range') { go('range'); return ''; }
   const d = currentDrill(a);
+  const tr = d.tracker || 'full';
   const cl = club(a.club);
   const st = shotType(a.type);
   const done = drillShots(a).length;
   const last = a.shots[a.shots.length - 1];
-  const rel = reliability(S()).clubs[cl.id];
   const pend = a.pending || {};
-  const view = viewFor(cl.kind, a.type);
+  const view = logView(a);
   const has = hasDraft(pend);
-  const draft = { view, height: pend.height || null, ...draftPart(pend) };
-  const lenOpts = view === 'woods' ? [['short', 'Short'], ['pin', 'Normal'], ['long', 'Long']] : [['short', 'Short'], ['pin', 'Pin high'], ['long', 'Long']];
-  const dirOpts = view === 'woods' ? [['obL', 'OB L'], ['left', 'Left'], ['line', 'Fairway', 'Fwy'], ['right', 'Right'], ['obR', 'OB R']] : [['left', 'Left'], ['line', 'On line'], ['right', 'Right']];
-  const heightRow = st.height ? outRow('Height', 'height', [['low', 'Low'], ['mid', 'Mid'], ['high', 'High']], pend.height) : '';
-  const curveRow = st.curve ? outRow('Curve', 'curve', [['hook', 'Hook'], ['draw', 'Draw'], ['none', 'Straight', 'Str.'], ['fade', 'Fade'], ['slice', 'Slice']], pend.curve) : '';
-  return `
-  ${logTop('endRange', d, `${done}/${d.balls} balls`, 'nextDrill', a.di < a.drills.length - 1)}
-  <div class="scroll-y log-body" data-keep="rlog">
-  <button class="setup-row" data-act="openShotSetup"><span><b>${esc(cl.name)}</b> · ${esc(st.name)} ${rel && !rel.locked ? `<span class="badge ${rel.top ? '' : 'plain'}">${rel.top ? '★ ' : ''}${rel.score}</span>` : ''}</span><span class="muted">Change ›</span></button>
-  <div class="status ${has ? 'draft' : ''}" aria-live="polite"><span>${has ? esc(describeShot(draft)) : last ? esc(describeShot(last)) : 'Tap the ball, then the grass'}</span><span class="muted">${has ? 'This shot' : last ? `Saved #${done}` : ''}</span></div>
+  const basic = d.id === 'basic';
+  const more = a.di < a.drills.length - 1;
+  const counts = basic ? a.shots.reduce((m, s) => { m[s.club] = (m[s.club] || 0) + 1; return m; }, {}) : null;
+  let progress = `${done}/${d.balls} balls`, body = '', nextLabel = 'Next shot ›', carryBtn = false, topNext = null;
+  if (basic) {
+    progress = `${a.shots.length} ball${a.shots.length === 1 ? '' : 's'} · ${Object.keys(counts).length} club${Object.keys(counts).length === 1 ? '' : 's'}`;
+    topNext = 'Finish ›';
+  }
+  if (tr === 'full' || tr === 'play9') {
+    const draft = { view, height: pend.height || null, ...draftPart(pend) };
+    const lenOpts = view === 'woods' ? [['short', 'Short'], ['pin', 'Normal'], ['long', 'Long']] : [['short', 'Short'], ['pin', 'Pin high'], ['long', 'Long']];
+    const dirOpts = view === 'woods' ? [['obL', 'OB L'], ['left', 'Left'], ['line', 'Fairway', 'Fwy'], ['right', 'Right'], ['obR', 'OB R']] : DIR3;
+    const heightRow = st.height ? outRow('Height', 'height', [['low', 'Low'], ['mid', 'Mid'], ['high', 'High']], pend.height) : '';
+    const curveRow = st.curve ? outRow('Curve', 'curve', [['hook', 'Hook'], ['draw', 'Draw'], ['none', 'Straight', 'Str.'], ['fade', 'Fade'], ['slice', 'Slice']], pend.curve) : '';
+    let lead = basic ? clubToday(a) : '';
+    if (tr === 'play9') {
+      const now = p9Now(a);
+      if (!now) return `${logTop('endRange', d, 'All 9 holes played', 'endRange', false)}<div class="scroll-y" data-shell><div class="card hero"><span class="lbl">Round complete</span><span class="h2">${esc(p9Score(a))}</span></div></div><div class="bar"><button class="btn pri" data-act="${more ? 'nextDrill' : 'endRange'}">${more ? 'Next drill ›' : 'Finish session ›'}</button></div>`;
+      progress = `Hole ${now.h + 1} of 9 · shot ${now.k + 1} of ${now.n}`;
+      lead = play9Card(a, now);
+      nextLabel = now.k === now.n - 1 ? (now.h < 8 ? `Next · hole ${now.h + 2} ›` : 'Finish round ›') : 'Next shot ›';
+    }
+    const idle = basic || tr === 'play9' ? 'Tap the ball, then the grass' : 'Tap the ball, then the grass';
+    body = `${lead}
+  <div class="status ${has ? 'draft' : ''}" aria-live="polite"><span>${has ? esc(describeShot(draft)) + (pend.check != null ? ` · ${pend.check ? '✓' : '✗'} check` : '') : last && last.drill === d.id ? esc(describeShot(last)) : idle}</span><span class="muted">${has ? 'This shot' : done ? `Saved #${done}` : ''}</span></div>
   <div class="target-wrap">${targetSvg(a)}</div>
   <p class="helper opt">Ball = contact · grass = length and direction · bottom row = chunk · hold the ball = topped or shank · drag = curve. All optional.</p>
   <div class="outcome">
@@ -376,31 +641,52 @@ function rangeLog() {
     ${outRow('Length', 'setLen', lenOpts, pend.row)}
     ${outRow('Direction', 'setDir', dirOpts, pend.col)}
     ${heightRow}${curveRow}
+    ${d.check ? checkRow(d.check, pend.check) : ''}
+  </div>`;
+    carryBtn = tr === 'full';
+  } else if (tr === 'carry') {
+    const r = carryBody(a, d, pend); body = r.html; nextLabel = r.cx.next;
+  } else if (tr === 'shape') {
+    body = shapeBody(a, d, pend);
+    const n = done + 1; nextLabel = d.mode === 'nine' ? `Next · ${shapeWords(...NINE_SEQ[n % 9])} ›` : 'Next shot ›';
+  } else if (tr === 'strike') {
+    body = strikeBody(a, d, pend);
+  }
+  return `
+  ${logTop('endRange', d, progress, basic ? 'endRange' : 'nextDrill', more, topNext)}
+  ${clubRail(a, d, counts)}
+  <div class="scroll-y log-body" data-keep="rlog-${d.id}">
+  ${body}
   </div>
-  </div>
-  <div class="bar"><div class="bar-row">
+  <div class="bar"><div class="bar-row${carryBtn ? '' : ' two'}">
     <button class="btn sec sm" data-act="undo">${has ? 'Clear' : 'Undo'}</button>
-    <button class="btn dash sm" data-act="carry" aria-label="Carry yards, optional">${pend.carry != null ? `${pend.carry} yds` : '+ Carry'}</button>
-    <button class="btn pri next-shot" data-act="nextShot" ${has ? '' : 'disabled'}>Next shot ›</button>
+    ${carryBtn ? `<button class="btn dash sm" data-act="carry" aria-label="Carry yards, optional">${pend.carry != null ? `${pend.carry} yds` : '+ Carry'}</button>` : ''}
+    <button class="btn pri next-shot" data-act="nextShot" ${has ? '' : 'disabled'}>${nextLabel}</button>
   </div></div>`;
 }
+function p9Score(a) {
+  const shots = a.shots.filter(s => s.drill === 'play9');
+  const fw = shots.filter(s => s.phase === 'tee' && s.finish && s.finish.col);
+  const gr = shots.filter(s => s.phase === 'approach' && s.finish);
+  return `Fairways ${fw.filter(s => s.finish.col === 'line').length} of ${fw.length} · greens ${gr.filter(s => s.finish.row === 'pin' && s.finish.col === 'line').length} of ${gr.length}`;
+}
 
+// Full bag: tiles with carry, loft and reliability, plus every swing type.
 function shotSetupSheet() {
   const a = S().active;
-  const groups = [['Woods', ['wood', 'hybrid']], ['Irons', ['iron']], ['Wedges', ['wedge']]];
+  const groups = [['Woods and hybrids', ['wood', 'hybrid']], ['Irons', ['iron']], ['Wedges', ['wedge']]];
   const rel = reliability(S()).clubs;
-  return `<div class="sheet-wrap" data-act="closeSheet"><div class="sheet" role="dialog" aria-label="Club and shot type" data-stop>
-    <div class="grab"></div><h2>Club and shot type</h2>
+  return `<div class="sheet-wrap" data-act="closeSheet"><div class="sheet" role="dialog" aria-label="Club and swing" data-stop>
+    <div class="grab"></div><div class="sheet-title"><h2>Your bag</h2><span class="muted">Carry · reliability</span></div>
     <div class="sheet-body">
-    ${groups.map(([name, kinds]) => `<span class="lbl">${name}</span><div class="chips">${inBag().filter(c => kinds.includes(c.kind)).map(c => {
-      const r = rel[c.id]; const top = r && r.top;
-      return `<button class="chip ${c.id === a.club ? 'on' : ''} ${top ? 'gold' : ''}" data-act="setClub" data-v="${c.id}">${top ? '★ ' : ''}${esc(c.name)}</button>`;
-    }).join('')}</div>`).join('')}
-    <span class="lbl">Shot type</span>
+    ${groups.map(([name, kinds]) => { const list = inBag().filter(c => kinds.includes(c.kind)); return list.length ? `<span class="lbl">${name}</span><div class="bag-tiles">${list.map(c => {
+      const r = rel[c.id], top = r && r.top, on = c.id === a.club;
+      return `<button class="bag-tile${on ? ' on' : ''}${top && !on ? ' top' : ''}" data-act="setClub" data-v="${c.id}" aria-pressed="${on}" aria-label="${esc(c.name)}"><b>${top ? '★' : ''}${esc(clubShort(c))}</b><span>${c.carry}${c.loft ? ` · ${c.loft}°` : ''}</span><small>${r && !r.locked ? r.score : `${r ? r.sessions : 0}/${RELIABILITY.sessionsRequired}`}</small></button>`;
+    }).join('')}</div>` : ''; }).join('')}
+    <span class="lbl">Swing</span>
     <div class="chips">${SHOT_TYPES.map(t => `<button class="chip ${t.id === a.type ? 'on' : ''}" data-act="setType" data-v="${t.id}">${esc(t.name)}</button>`).join('')}</div>
-    <div class="science">${science.trajectories}<div class="science-text"><b>${esc(shotType(a.type).name)}</b><span>Counts as a win: ${esc(shotType(a.type).win.toLowerCase())}.</span></div></div>
     </div>
-    <button class="btn pri" data-act="closeSheet">Done</button>
+    <button class="btn pri" data-act="closeSheet">Use ${esc(club(a.club).name)} · ${esc(shotType(a.type).name)}</button>
   </div></div>`;
 }
 
@@ -415,9 +701,12 @@ function rangeRecapView(id) {
   return `
   <div class="top">${back('', 'Home')}${themeBtn()}</div>
   <div class="scroll-y" data-keep="rrecap">
-  <span class="lbl">Session recap · ${fmtDate(sess.ended)} · ${n} balls</span>
+  <span class="lbl">${sess.basic ? 'Basic session' : 'Session recap'} · ${fmtDate(sess.ended)} · ${n} balls</span>
   <h1>${esc(rc.headline)}</h1>
+  ${(() => { const ds = drillScores(sess); return ds.length ? `<div class="card"><span class="lbl">Drill scores</span>${ds.map(x => `<div class="score-row"><b>${esc(x.name)}</b><span>${esc(x.value)}</span></div>`).join('')}</div>` : ''; })()}
+  ${gapSuggest(sess, st.bag).map(g => `<div class="card gap-card"><span class="lbl">Update My bag?</span><span>${esc(g.name)}: full <b>${g.full}</b> (was ${g.was[0]}), choked <b>${g.choked}</b> (was ${g.was[1]}).</span><button class="btn pri sm" data-act="applyGap" data-v="${g.id}" data-full="${g.full}" data-choked="${g.choked}">Update My bag</button></div>`).join('')}
   <div class="card">${rc.lines.map(l => `<p>${esc(l)}</p>`).join('')}<p class="muted">${esc(rc.cause)}</p></div>
+  ${(() => { const ct = clubTable(sess, st.bag); return ct.length > 1 || sess.basic ? `<div class="card"><span class="lbl">By club</span>${ct.map(r => `<div class="score-row"><b>${esc(r.name)}</b><span>${r.n} ball${r.n === 1 ? '' : 's'}${r.solid != null ? ` · ${r.solid}% solid` : ''}${r.lean ? ` · misses ${r.lean}` : ''}</span></div>`).join('')}</div>` : ''; })()}
   ${scienceCard(rc.science)}
   <div class="stat-row">${['right', 'line', 'left'].map(k => `<div class="stat ${rc.dirs[k] === Math.max(rc.dirs.left, rc.dirs.right) && k !== 'line' && rc.dirs[k] > 0 ? 'hi' : ''}"><b>${rc.dirs[k]}</b><span>${k === 'line' ? 'on line' : k}</span></div>`).join('')}</div>
   ${rc.goals.length ? `<div class="card">${rc.goals.map(g => `<span><b>${esc(g.name)}:</b> ${g.hits} of ${g.n} hit the goal</span>`).join('')}</div>` : ''}
@@ -793,7 +1082,7 @@ function bindTarget(kind) {
     const l = gesture.pts[gesture.pts.length - 1];
     if (Math.hypot(p.x - l.x, p.y - l.y) < 3) return;
     gesture.pts.push(p);
-    if (kind === 'range' && gesture.pts.length > 3) {
+    if (kind === 'range' && gesture.pts.length > 3 && ['full', 'play9'].includes(trackerOf(S().active))) {
       let path = svg.querySelector('.t-drag');
       if (!path) { path = document.createElementNS('http://www.w3.org/2000/svg', 'path'); path.setAttribute('class', 't-drag'); svg.appendChild(path); }
       path.setAttribute('d', 'M' + gesture.pts.map(q => `${q.x} ${q.y}`).join(' L'));
@@ -805,6 +1094,9 @@ function bindTarget(kind) {
     const g = gesture; gesture = null;
     const p = g.pts[g.pts.length - 1];
     if (kind === 'putt') return logPutt(p);
+    const tr = trackerOf(S().active);
+    if (tr === 'carry') return carryTap(p);
+    if (tr === 'strike') return strikeTap(p);
     const curve = curveFromPath(g.pts);
     rangeInput(g.pts[0], p, curve, g.long);
   };
@@ -812,10 +1104,23 @@ function bindTarget(kind) {
   svg.addEventListener('pointercancel', () => { gesture = null; clearTimeout(pressTimer); });
 }
 
+function carryTap(p) {
+  const a = S().active, d = currentDrill(a), cx = carryCtx(a, d), hit = carryHit(cx.target, p.x, p.y);
+  update(s => { const pd = s.active.pending = s.active.pending || {}; Object.assign(pd, { carry: hit.carry, lx: hit.lx, side: hit.side }); });
+  if (navigator.vibrate) navigator.vibrate(6);
+  render();
+}
+function strikeTap(p) {
+  const f = faceHit(p.x, p.y, S().hand);
+  update(s => { const pd = s.active.pending = s.active.pending || {}; pd.face = f; });
+  if (navigator.vibrate) navigator.vibrate(6);
+  render();
+}
+
 function rangeInput(start, p, curve, long) {
   const a = S().active;
   const cl = club(a.club);
-  const view = viewFor(cl.kind, a.type);
+  const view = logView(a);
   const hand = S().hand;
   const hit = hitTest(view, p.x, p.y, hand);
   if (!hit) return;
@@ -848,7 +1153,7 @@ function commitShot(part, view) {
   const a = S().active;
   const d = currentDrill(a);
   const pend = a.pending || {};
-  const shot = { t: Date.now(), drill: d.id, club: a.club, type: a.type, view, hand: S().hand, height: pend.height || null, carry: null, ...part };
+  const shot = { t: Date.now(), drill: d.id, club: a.club, type: a.type, view, hand: S().hand, height: pend.height || null, carry: null, tracker: d.tracker || 'full', ...part };
   if (!shot.curve) shot.curve = null;
   let advanced = false;
   update(s => {
@@ -856,15 +1161,17 @@ function commitShot(part, view) {
     s.active.pending = {};
     if (navigator.vibrate) navigator.vibrate(12);
     const n = s.active.shots.filter(x => x.drill === d.id).length;
-    if (n >= d.balls && s.active.di < s.active.drills.length - 1) {
+    if (d.balls && n >= d.balls && s.active.di < s.active.drills.length - 1) {
       s.active.di++;
-      const nd = currentDrill(s.active);
-      s.active.club = nd.club; s.active.type = nd.type;
+      const nd = currentDrill(s.active), st0 = drillStartClub(s.active, nd);
+      s.active.club = st0.club; s.active.type = st0.type;
       advanced = nd.name;
+    } else if (d.tracker === 'play9' || d.mode === 'onedist') {
+      const nx = drillStartClub(s.active, d); s.active.club = nx.club; s.active.type = nx.type;
     }
   });
   if (advanced) toast(`${d.name} done. Next: ${advanced}`);
-  else if (drillShots(S().active).length === d.balls) toast(`${d.name} done. Tap Finish when ready.`);
+  else if (d.balls && drillShots(S().active).length === d.balls) toast(`${d.name} done. Tap Finish when ready.`);
   render();
 }
 
@@ -938,34 +1245,71 @@ const actions = {
   theme: () => { update(s => { s.theme = s.theme === 'night' ? 'day' : 'night'; }); render(); },
   rangeCat: v => { ui.rangeCat = v; render(); },
   pickRange: v => { ui.rangePick.has(v) ? ui.rangePick.delete(v) : ui.rangePick.add(v); render(); },
+  startBasic: () => {
+    if (S().active) finishActive();
+    const st0 = drillStartClub({ shots: [] }, BASIC);
+    update(s => { s.active = { kind: 'range', basic: true, id: uid(), started: Date.now(), drills: [BASIC.id], di: 0, club: st0.club, type: 'full', shots: [], pending: {} }; });
+    go('range/log');
+  },
   startRange: () => {
     const drills = RANGE_DRILLS.filter(d => ui.rangePick.has(d.id)).map(d => d.id);
     if (!drills.length) return;
     if (S().active) finishActive();
     const first = drillById(drills[0]);
-    update(s => { s.active = { kind: 'range', id: uid(), started: Date.now(), drills, di: 0, club: first.club, type: first.type, shots: [], pending: {} }; });
+    const st0 = drillStartClub({ shots: [], club: first.club }, first);
+    update(s => { s.active = { kind: 'range', id: uid(), started: Date.now(), drills, di: 0, club: st0.club, type: st0.type, shots: [], pending: {} }; });
     ui.rangePick = null;
     go('range/log');
   },
   openShotSetup: () => openOverlay(shotSetupSheet()),
-  setClub: v => { update(s => { s.active.club = v; const k = club(v).kind; if (s.active.type === 'tee' && !['wood', 'hybrid'].includes(k)) s.active.type = 'full'; s.active.pending = {}; }); render(); openOverlay(shotSetupSheet()); },
+  setClub: v => { chooseClub(v); render(); openOverlay(shotSetupSheet()); },
+  railClub: v => { chooseClub(v); render(); },
+  drillCheck: v => { update(s => { const pd = s.active.pending = s.active.pending || {}; const val = v === 'yes'; pd.check = pd.check === val ? null : val; }); render(); },
+  carryStep: v => { const a = S().active, cx = carryCtx(a, currentDrill(a)); update(s => { const pd = s.active.pending = s.active.pending || {}; pd.carry = Math.max(5, (pd.carry != null ? pd.carry : cx.target) + +v); }); render(); },
+  clockLen: v => { update(s => { const pd = s.active.pending = s.active.pending || {}; pd.swing = v; }); render(); },
+  gripSel: v => { update(s => { const pd = s.active.pending = s.active.pending || {}; pd.grip = v; }); render(); },
+  shapeGot: v => { const [h, c] = v.split('-'); update(s => { const pd = s.active.pending = s.active.pending || {}; pd.got = pd.got && pd.got.h === h && pd.got.c === c ? null : { h, c }; }); render(); },
   setType: v => { update(s => { s.active.type = v; if (v === 'tee' && !['wood', 'hybrid'].includes(club(s.active.club).kind)) s.active.club = 'D'; if ((v === 'pitch' || v === 'chip') && club(s.active.club).kind !== 'wedge') s.active.club = '56'; s.active.pending = {}; }); render(); openOverlay(shotSetupSheet()); },
   closeSheet: () => closeOverlays(),
   height: v => { update(s => { s.active.pending = { ...(s.active.pending || {}), height: v }; }); render(); },
   curve: v => { update(s => { s.active.pending = { ...(s.active.pending || {}), curve: v }; }); render(); },
-  undo: () => { update(s => { if (hasDraft(s.active.pending)) s.active.pending = {}; else s.active.shots.pop(); }); render(); },
+  undo: () => { update(s => {
+    if (hasDraft(s.active.pending)) { s.active.pending = {}; return; }
+    s.active.shots.pop();
+    const d = currentDrill(s.active); // drill-led clubs follow the shot you are back on
+    if (d.tracker === 'play9' || d.mode === 'onedist') { const nx = drillStartClub(s.active, d); s.active.club = nx.club; s.active.type = nx.type; }
+  }); render(); },
   setContact: v => { update(s => { const pd = s.active.pending = s.active.pending || {}; pd.contact = pd.contact === v ? null : v; }); render(); },
   setLen: v => { update(s => { const pd = s.active.pending = s.active.pending || {}; pd.row = pd.row === v ? null : v; Object.assign(pd, { x: null, y: null, ft: null, dx: null, dy: null, holed: false }); }); render(); },
   setDir: v => { update(s => { const pd = s.active.pending = s.active.pending || {}; pd.col = pd.col === v ? null : v; Object.assign(pd, { x: null, y: null, ft: null, dx: null, dy: null, holed: false }); }); render(); },
   nextShot: () => {
-    const a = S().active; const pd = a.pending || {};
-    if (!hasDraft(pd)) return toast('Mark contact, length or direction first');
-    commitShot(draftPart(pd), viewFor(club(a.club).kind, a.type));
+    const a = S().active, pd = a.pending || {}, d = currentDrill(a), tr = d.tracker || 'full';
+    if (!hasDraft(pd)) return toast('Mark something about the shot first');
+    if (tr === 'carry') {
+      const cx = carryCtx(a, d);
+      if (pd.carry == null && !pd.contact) return toast('Tap where it landed');
+      const diff = pd.carry != null ? pd.carry - cx.target : null;
+      const finish = diff == null && !pd.side ? null : { row: diff == null ? null : diff > 5 ? 'long' : diff < -5 ? 'short' : 'pin', col: pd.side || null };
+      return commitShot({ contact: pd.contact || null, carry: pd.carry != null ? pd.carry : null, target: cx.target, side: pd.side || null, lx: pd.lx != null ? pd.lx : null, swing: cx.swing || null, grip: cx.grip || null, finish, curve: null, x: null, y: null }, 'carry');
+    }
+    if (tr === 'shape') {
+      const [h, c] = shapePlan(a, d);
+      const got = pd.got || null;
+      return commitShot({ plan: { h, c }, got, matched: !!got && got.h === h && got.c === c, contact: pd.contact || null, curve: got ? got.c : null, height: got ? got.h : null, finish: pd.col ? { row: null, col: pd.col } : null, x: null, y: null }, 'shape');
+    }
+    if (tr === 'strike') {
+      const f = pd.face || null;
+      return commitShot({ face: f, contact: f ? faceContact(f) : (pd.contact || null), finish: pd.col ? { row: null, col: pd.col } : null, curve: null, x: null, y: null }, 'strike');
+    }
+    const part = draftPart(pd);
+    if (pd.check != null) part.check = pd.check;
+    if (tr === 'play9') { const now = p9Now(a); if (!now) return; Object.assign(part, { hole: now.h + 1, par: now.H.par, phase: now.phase, dist: now.left }); }
+    commitShot(part, logView(a));
   },
   carry: () => promptCarry(),
   nextDrill: () => {
     const a = S().active;
-    if (a.di < a.drills.length - 1) { update(s => { s.active.di++; const nd = currentDrill(s.active); s.active.club = nd.club; s.active.type = nd.type; s.active.pending = {}; }); render(); }
+    if (a.di < a.drills.length - 1) { update(s => { s.active.di++; const nd = currentDrill(s.active), st0 = drillStartClub(s.active, nd); s.active.club = st0.club; s.active.type = st0.type; s.active.pending = {}; }); render(); }
     else actions.endRange();
   },
   endRange: () => { const id = finishActive(); id ? go('range/recap/' + id) : go('practice'); },
@@ -1033,6 +1377,10 @@ const actions = {
   slope: v => { update(s => { s.caddy.slope = v; }); render(); },
   steep: () => { update(s => { s.caddy.steep = !s.caddy.steep; }); render(); },
   hand: v => { update(s => { s.hand = v; }); render(); },
+  applyGap: (v, el) => {
+    update(s => { const c = s.bag.find(x => x.id === v); if (c) { c.carry = +el.dataset.full; c.choked = +el.dataset.choked; } });
+    toast('My bag updated'); el.disabled = true; el.textContent = 'Updated';
+  },
   toggleOut: v => {
     const c = S().bag.find(x => x.id === v);
     if (!c) return;
@@ -1062,6 +1410,7 @@ const actions = {
 };
 
 document.addEventListener('click', e => {
+  if (ui.railHeld) { ui.railHeld = false; if (!ui.holdUp || Date.now() - ui.holdUp < 600) { e.preventDefault(); e.stopPropagation(); return; } }
   const yt = e.target.closest('a[data-yt]');
   if (yt) { if (openYouTube(yt.dataset.yt)) e.preventDefault(); return; } // never toggles the drill card
   const el = e.target.closest('[data-act]');

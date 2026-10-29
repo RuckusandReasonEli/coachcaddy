@@ -4,13 +4,19 @@
 
 Coach Caddy is a golf practice and on-course companion. It runs as a home-screen web app: no app store, no accounts, no server. Everything you log stays on your phone.
 
-Version 0.2.
+Version 0.3.
 
 ## What's in it
 
 - **Pre-round warm-up.** Five illustrated mobility moves, 45 seconds each: Twist, Reverse Flys, Body Waves, Deep Squat Calf Raises and Standing Thoracic Rotations. Tap **Warm up first** on the home screen (or Warm-up in Practice) to open the cards. Each card shows a start and a movement picture, three cues, a coach tip and its own timer with pause and resume. Swipe or tap › to move between cards. Check **Auto-advance** and each finished move rolls into the next card, which starts itself after a 3-second get-ready; the setting is remembered. The screen stays awake while the timer runs where the phone allows it.
-- **Range practice.** Pick from 18 drills, then log every ball on a ball-and-grass target. Tap the ball for contact and the grass for length and direction, or use the Contact, Length and Direction rows. Every part is optional; tap **Next shot** to save. The bottom row is the chunk zone, drag records curve, and carry yards are optional.
-  - The target adapts to the club and shot type: irons show a pin, woods show a fairway with a tee, and pitches and chips show a green with rings.
+- **Range practice.** Start a **Basic range session** (no drill, no ball count, any club) or pick from 18 drills. Each drill logs the outcome that matters for it:
+  - **Full-swing drills** use the ball-and-grass target. Tap the ball for contact and the grass for length and direction, or use the Contact, Length and Direction rows. Every part is optional; tap **Next shot** to save. The bottom row is the chunk zone, drag records curve, and carry yards are optional. The target adapts to the club and shot type: irons show a pin, woods show a fairway with a tee, and pitches and chips show a green with rings.
+  - **Drill check.** Drills with a key move (line, gate, feet together, pause and others) add one optional Yes/No question, such as "Divot started after the line?". The recap scores it.
+  - **Distance drills** (wedge ladder, clock wedges, choke-down gapping, one yardage with 3 clubs) show a top-down range around the target. Tap where the ball landed and fine-tune with − and +. Within 5 yards counts as on the number. Choke-down gapping offers to update My bag with the carries you measured.
+  - **Shape drills** (9-shot drill and punch shot) show a 3 × 3 grid of heights and curves. The planned shot is outlined in gold; tap the box the ball actually flew.
+  - **Impact spray** shows the club face. Tap where the powder mark is; after a few balls it names your strike pattern.
+  - **Play 9 on the range** plays a 9-hole card with par 3s, 4s and 5s (18 balls). The caddy picks a club for each shot, and the recap counts fairways and greens.
+- **Changing clubs.** A one-row club rail sits above every logger: tap a club to switch, swipe for more. The drill's club has a gold dot and your most reliable clubs are starred. Touch and hold the rail, or tap the swing button, for the full bag and swing types. A basic session shows ball counts on each club and a "By club" breakdown in the recap.
 - **Putting practice.** 10 drills and a top-down hole logger. Tap the cup for a make or where the ball stopped, or pick distance (short or long) and direction. Lip outs are one tap. Tap **Next shot** to save. Breaking putts read as high side or low side.
 - **Course practice.** Log a round hole by hole. The recap shows where strokes leaked and builds your next practice plan.
 - **Plain-language recaps.** Each recap names your miss pattern and its likely cause, shows a golf-science diagram, and suggests your next drills.
@@ -52,9 +58,9 @@ Open **My bag** and tap **Try sample data** to load a few weeks of practice hist
 | `index.html` | App shell |
 | `css/fonts.css`, `fonts/` | Bundled Inter, Space Grotesk and JetBrains Mono (SIL Open Font License), so the app looks the same offline |
 | `css/styles.css` | Day and night themes, layout, target colors |
-| `js/data.js` | Clubs, shot types, drills, lie rules, condition constants (tune here) |
+| `js/data.js` | Clubs, shot types, drills and the tracker each drill uses, lie rules, condition constants (tune here) |
 | `js/engine.js` | Recaps, reliability scoring, caddy recommendations |
-| `js/targets.js` | The ball-and-grass, fairway, green and putting targets |
+| `js/targets.js` | The ball-and-grass, fairway, green, carry, club-face and putting targets |
 | `js/app.js` | Screens and navigation |
 | `js/store.js` | Local storage on the phone |
 | `js/sample.js` | Sample history |

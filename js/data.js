@@ -71,6 +71,50 @@ export const RANGE_DRILLS = [
     how: 'Same routine, same timing, every ball. If you step off, start the routine over.', glyph: 'routine' },
 ];
 
+// How each range drill is logged. Full swings keep the ball-and-grass tracker and get an
+// optional yes/no "drill check"; other swings get a tracker for what the drill trains.
+//   full: ball-and-grass (check = optional yes/no, score = how the recap names it)
+//   carry: carry against a target (mode ladder | clock | grip | onedist)
+//   shape: planned vs actual height and curve (mode nine | punch)
+//   strike: where the ball hit the clubface
+//   play9: tee shot, then approach, hole by hole
+const TRACKING = {
+  line:      { tracker: 'full', check: 'Divot started after the line?', score: 'Divot after the line' },
+  feet:      { tracker: 'full', check: 'Held the finish 2 seconds?', score: 'Held the finish' },
+  gate:      { tracker: 'full', check: 'Clean through the gate?', score: 'Clean through the gate' },
+  split:     { tracker: 'full', check: 'Club came from the inside?', score: 'From the inside' },
+  ninethree: { tracker: 'full', check: 'Ball first, then turf?', score: 'Ball then turf' },
+  pause:     { tracker: 'full', check: 'Held the pause at the top?', score: 'Held the pause' },
+  align:     { tracker: 'full', check: 'Setup matched the sticks?', score: 'Setup matched the sticks' },
+  slomo:     { tracker: 'full', check: 'Same tempo at full speed?', score: 'Kept the tempo' },
+  routine:   { tracker: 'full', check: 'Full routine, no step-off?', score: 'Full routine' },
+  fairway:   { tracker: 'full' },
+  spray:     { tracker: 'strike' },
+  ladder:    { tracker: 'carry', mode: 'ladder' },
+  clock:     { tracker: 'carry', mode: 'clock' },
+  gapping:   { tracker: 'carry', mode: 'grip' },
+  onedist:   { tracker: 'carry', mode: 'onedist' },
+  nine:      { tracker: 'shape', mode: 'nine' },
+  punch:     { tracker: 'shape', mode: 'punch' },
+  play9:     { tracker: 'play9' },
+};
+RANGE_DRILLS.forEach(d => Object.assign(d, TRACKING[d.id] || { tracker: 'full' }));
+
+// Basic range session: no drill, no ball count, any club.
+export const BASIC = { id: 'basic', name: 'Basic session', cat: 'Basic', trains: 'Anything', fixes: '', balls: null, club: '7i', type: 'full', tracker: 'full', glyph: 'traj',
+  how: 'Pick a club, hit, and log what happened. Switch clubs whenever you like.' };
+
+export const LADDER_YDS = [50, 60, 70, 80, 90];
+// Clock wedges: backswing length, with a starting guess as a share of the club's full carry.
+export const CLOCK = [{ id: '730', name: '7:30', share: 0.5 }, { id: '900', name: '9:00', share: 0.7 }, { id: '1030', name: '10:30', share: 0.85 }];
+// 9-shot drill order: height then curve.
+export const NINE_SEQ = [['high', 'draw'], ['high', 'none'], ['high', 'fade'], ['mid', 'draw'], ['mid', 'none'], ['mid', 'fade'], ['low', 'draw'], ['low', 'none'], ['low', 'fade']];
+// Play 9 on the range: par 3s take one ball, par 4s two (tee, approach), par 5s three (tee, lay-up, approach) = 18.
+export const PLAY9_HOLES = [
+  { par: 4, yds: 380 }, { par: 4, yds: 365 }, { par: 3, yds: 155 }, { par: 5, yds: 515 }, { par: 4, yds: 400 },
+  { par: 3, yds: 175 }, { par: 4, yds: 390 }, { par: 4, yds: 355 }, { par: 5, yds: 530 },
+];
+
 export const PUTT_DRILLS = [
   { id: 'pgate',   name: 'Gate drill',         cat: 'Line',     trains: 'Start line',       dist: 5,  brk: 'straight', putts: 10, glyph: 'pgate',
     how: 'Two tees just wider than the ball, a foot in front. Roll it through the gate.' },

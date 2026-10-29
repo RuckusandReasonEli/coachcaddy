@@ -221,3 +221,15 @@ export function fairwayScene() {
   <line x1="216" y1="42" x2="216" y2="20" stroke="#F6F3EA" stroke-width="1.6"/><path d="M216 20 l11 4 l-11 4Z" fill="#E2B65A"/>
 </svg>`;
 }
+
+// Short club labels for the club rail: D, 3W, 5H, 7i, PW, GW, SW, LW; custom clubs derive one.
+const SHORT = { D: 'D', PW: 'PW', 52: 'GW', 56: 'SW', 60: 'LW' };
+export function clubShort(c) {
+  if (SHORT[c.id]) return SHORT[c.id];
+  const m = /^(\d+)\s*-?\s*(wood|hybrid|iron|w|h|i)\b/i.exec(c.name || '');
+  if (m) return m[1] + { wood: 'W', w: 'W', hybrid: 'H', h: 'H', iron: 'i', i: 'i' }[m[2].toLowerCase()];
+  if (/^driver/i.test(c.name)) return 'D';
+  if (c.kind === 'wedge' && c.loft) return `${c.loft}°`;
+  const words = (c.name || c.id).split(/\s+/).filter(Boolean);
+  return words.length > 1 ? words.map(w => w[0].toUpperCase()).join('').slice(0, 3) : words[0].slice(0, 3);
+}

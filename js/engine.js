@@ -1,5 +1,5 @@
 // Coach Caddy logic: shot wording, recaps, club reliability and caddy recommendations.
-import { SURFACES, SLOPES, TEMP_YDS_PER_10F, ELEVATION_PCT_PER_1000FT, DIFFICULTY, RELIABILITY, RANGE_DRILLS, PUTT_DRILLS, SHOT_TYPES } from './data.js';
+import { SURFACES, SLOPES, TEMP_YDS_PER_10F, ELEVATION_PCT_PER_1000FT, DIFFICULTY, RELIABILITY, RANGE_DRILLS, PUTT_DRILLS, SHOT_TYPES, BASIC, CLOCK } from './data.js';
 
 const SOLID = new Set(['pure', 'solid']);
 const cap = s => s ? s[0].toUpperCase() + s.slice(1) : s;
@@ -254,9 +254,12 @@ function sessionClubScore(shots) {
     return f.col ? (f.col === 'line' ? 1 : 0) : null;
   }).filter(v => v != null);
   const line = avg(lineVals);
-  const carries = shots.map(s => s.carry).filter(c => c != null);
+  const targeted = shots.filter(s => s.carry != null && s.target != null);
+  const carries = shots.filter(s => s.target == null).map(s => s.carry).filter(c => c != null);
   let dist;
-  if (carries.length >= 3) {
+  if (targeted.length >= 3) {
+    dist = targeted.filter(s => Math.abs(s.carry - s.target) <= 5).length / targeted.length;
+  } else if (carries.length >= 3) {
     const mean = carries.reduce((a, b) => a + b, 0) / carries.length;
     const sd = Math.sqrt(carries.reduce((a, b) => a + (b - mean) ** 2, 0) / carries.length);
     dist = Math.max(0, Math.min(1, 1 - sd / (0.06 * mean)));
@@ -366,5 +369,77 @@ export function tempSummary(cond) {
 }
 
 export function drillById(id) {
+  if (id === BASIC.id) return BASIC;
   return RANGE_DRILLS.find(d => d.id === id) || PUTT_DRILLS.find(d => d.id === id);
+}
+
+// ---------- drill scores (v0.3 trackers) ----------
+const mean = xs => Math.round(xs.reduce((a, s) => a + s.carry, 0) / xs.length);
+
+// One line per drill in a session, in the drill's own terms.
+export function drillScores(sess) {
+  const by = {};
+  (sess.shots || []).forEach(s => { (by[s.drill] = by[s.drill] || []).push(s); });
+  const out = [];
+  Object.entries(by).forEach(([id, shots]) => {
+    const d = drillById(id);
+    if (!d || id === BASIC.id) return;
+    const tr = d.tracker || 'full';
+    if (tr === 'full' && d.score) {
+      const ans = shots.filter(s => s.check != null);
+      if (ans.length) out.push({ name: d.name, value: `${d.score}: ${ans.filter(s => s.check).length} of ${ans.length}` });
+    } else if (tr === 'carry') {
+      const c = shots.filter(s => s.carry != null && s.target != null);
+      if (!c.length) return;
+      if (d.mode === 'clock') {
+        const parts = CLOCK.map(L => { const xs = c.filter(s => s.swing === L.id); return xs.length ? `${L.name} ${mean(xs)} yds` : null; }).filter(Boolean);
+        out.push({ name: d.name, value: `Average carry · ${parts.join(' · ')}` });
+      } else if (d.mode === 'grip') {
+        const f = c.filter(s => s.grip === 'full'), k = c.filter(s => s.grip === 'choked');
+        out.push({ name: d.name, value: `Full ${f.length ? mean(f) : '–'} · choked ${k.length ? mean(k) : '–'}${f.length && k.length ? ` · gap ${mean(f) - mean(k)} yds` : ''}` });
+      } else {
+        out.push({ name: d.name, value: `Within 5 yds: ${c.filter(s => Math.abs(s.carry - s.target) <= 5).length} of ${c.length}` });
+      }
+    } else if (tr === 'shape') {
+      const g = shots.filter(s => s.got);
+      if (g.length) out.push({ name: d.name, value: d.mode === 'punch' ? `Stayed low: ${g.filter(s => s.got.h === 'low').length} of ${g.length}` : `Shapes matched: ${g.filter(s => s.matched).length} of ${g.length}` });
+    } else if (tr === 'strike') {
+      const f = shots.filter(s => s.face);
+      const n = h => f.filter(s => s.face.h === h).length;
+      if (f.length) out.push({ name: d.name, value: `Center ${n('center')} · heel ${n('heel')} · toe ${n('toe')} of ${f.length}` });
+    } else if (tr === 'play9') {
+      const fw = shots.filter(s => s.phase === 'tee' && s.finish && s.finish.col);
+      const gr = shots.filter(s => s.phase === 'approach' && s.finish);
+      out.push({ name: d.name, value: `Fairways ${fw.filter(s => s.finish.col === 'line').length} of ${fw.length} · greens ${gr.filter(s => s.finish.row === 'pin' && s.finish.col === 'line').length} of ${gr.length}` });
+    }
+  });
+  return out;
+}
+
+// Per-club summary for a session: balls, solid contact and which way the misses lean.
+export function clubTable(sess, bag) {
+  const by = {};
+  (sess.shots || []).forEach(s => { (by[s.club] = by[s.club] || []).push(s); });
+  return Object.entries(by).map(([id, shots]) => {
+    const withC = shots.filter(s => s.contact);
+    const solid = withC.length ? Math.round(withC.filter(s => SOLID.has(s.contact)).length / withC.length * 100) : null;
+    const l = shots.filter(s => s.finish && ['left', 'obL'].includes(s.finish.col)).length;
+    const r = shots.filter(s => s.finish && ['right', 'obR'].includes(s.finish.col)).length;
+    const lean = l >= 2 && l > r ? 'left' : r >= 2 && r > l ? 'right' : '';
+    const c = bag.find(b => b.id === id);
+    return { id, name: c ? c.name : id, carry: c ? c.carry : 0, n: shots.length, solid, lean };
+  }).sort((a, b) => b.carry - a.carry);
+}
+
+// Choke-down gapping: once a club has 3 of each grip, offer its averages for My bag.
+export function gapSuggest(sess, bag) {
+  const g = (sess.shots || []).filter(s => s.drill === 'gapping' && s.carry != null);
+  const by = {};
+  g.forEach(s => { (by[s.club] = by[s.club] || []).push(s); });
+  return Object.entries(by).map(([id, xs]) => {
+    const f = xs.filter(s => s.grip === 'full'), k = xs.filter(s => s.grip === 'choked');
+    if (f.length < 3 || k.length < 3) return null;
+    const c = bag.find(b => b.id === id);
+    return c ? { id, name: c.name, full: mean(f), choked: mean(k), was: [c.carry, c.choked] } : null;
+  }).filter(Boolean);
 }

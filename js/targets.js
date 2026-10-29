@@ -238,3 +238,82 @@ export function toViewBox(svg, clientX, clientY) {
   const p = pt.matrixTransform(m.inverse());
   return { x: Math.round(p.x), y: Math.round(p.y) };
 }
+
+// ---------- distance tracker: top-down range view around a target ----------
+// 8 px per yard, target ±20 yds visible; the gold line is the target, the band is ±5 yds.
+const CARRY = { pxPerYd: 8, top: 10, span: 20, cx: 201 };
+const ydToY = (target, yd) => CARRY.top + (target + CARRY.span - yd) * CARRY.pxPerYd;
+
+export function carryHit(target, x, y) {
+  const yd = Math.round(target + CARRY.span - (y - CARRY.top) / CARRY.pxPerYd);
+  const side = x < 160 ? 'left' : x > 242 ? 'right' : 'line';
+  return { carry: Math.max(5, yd), side, lx: Math.round(x) };
+}
+
+export function drawCarry(target, ghosts, pt) {
+  const lines = [];
+  for (let yd = target - 20; yd <= target + 20; yd += 5) {
+    const y = ydToY(target, yd);
+    const main = yd === target;
+    const edge = Math.abs(yd - target) === 5;
+    lines.push(main ? '' : `<line x1="44" y1="${y}" x2="358" y2="${y}" stroke="#FFFFFF" stroke-opacity="${edge ? 0.8 : 0.3}" stroke-width="1.5" ${edge ? 'stroke-dasharray="6 5"' : ''}/>`);
+    lines.push(`<text x="36" y="${y + 4}" text-anchor="end" font-size="${main ? 15 : 13}" font-weight="${main ? 700 : 500}" fill="${main ? '#E2B65A' : '#FFFFFF'}" font-family="'JetBrains Mono', monospace">${yd}</text>`);
+  }
+  const ty = ydToY(target, target);
+  const dots = ghosts.map(g => {
+    const y = ty - g.dy * CARRY.pxPerYd;
+    return y < 4 || y > 336 ? '' : `<circle cx="${g.lx}" cy="${y}" r="5" class="t-ghost"/>`;
+  }).join('');
+  const mark = pt ? `<circle cx="${pt.lx}" cy="${ydToY(target, pt.carry)}" r="12" class="t-mark"/>` : '';
+  return `<svg class="target" viewBox="0 0 358 340" role="img" aria-label="Range from above with yardage lines around the ${target}-yard target. Tap where the ball landed." data-target>
+  <defs><clipPath id="cclip"><rect width="358" height="340" rx="16"/></clipPath></defs>
+  <g clip-path="url(#cclip)"><rect width="358" height="340" class="t-grass"/>
+  <rect x="0" y="${ydToY(target, target + 5)}" width="358" height="${10 * CARRY.pxPerYd}" class="t-band"/></g>
+  <line x1="${CARRY.cx}" y1="0" x2="${CARRY.cx}" y2="340" stroke="#FFFFFF" stroke-opacity=".3" stroke-width="1.5" stroke-dasharray="4 6"/>
+  ${lines.join('')}
+  <line x1="44" y1="${ty}" x2="358" y2="${ty}" stroke="#E2B65A" stroke-width="3"/>
+  <ellipse cx="${CARRY.cx}" cy="${ty}" rx="12" ry="5" class="t-cup"/><rect x="${CARRY.cx - 1.5}" y="${ty - 42}" width="3" height="42" class="t-pole"/><path d="M${CARRY.cx + 1.5} ${ty - 41} L${CARRY.cx + 29} ${ty - 32} L${CARRY.cx + 1.5} ${ty - 23} Z" fill="#E2B65A"/>
+  <text x="56" y="${ydToY(target, target - 5) + 18}" class="t-lab" font-size="13">±5 yds counts as on the number</text>
+  <g class="t-lab" font-size="13"><text x="64" y="328">Left</text><text x="330" y="328" text-anchor="end">Right</text></g>
+  ${dots}${mark}
+</svg>`;
+}
+
+// ---------- strike map: the clubface split into heel/center/toe by high/mid/low ----------
+// Coordinates are stored for a right-hander (hosel on the left); a left-hander's face is mirrored.
+export function faceHit(x, y, hand) {
+  const xc = hand === 'left' ? 358 - x : x;
+  const h = xc < 164 ? 'heel' : xc > 248 ? 'toe' : 'center';
+  const v = y < 134 ? 'high' : y > 194 ? 'low' : 'mid';
+  return { x: Math.round(xc), y: Math.round(y), h, v };
+}
+
+export function drawFace(hand, ghosts, pt) {
+  const mx = x => hand === 'left' ? 358 - x : x;
+  const flip = hand === 'left' ? 'transform="translate(358 0) scale(-1 1)"' : '';
+  const dots = ghosts.map(g => `<circle cx="${mx(g.x)}" cy="${g.y}" r="7" class="t-facedot"/>`).join('');
+  const mark = pt ? `<circle cx="${mx(pt.x)}" cy="${pt.y}" r="13" class="t-mark"/>` : '';
+  const [l, r] = hand === 'left' ? ['TOE', 'HEEL'] : ['HEEL', 'TOE'];
+  return `<svg class="target" viewBox="0 0 358 300" role="img" aria-label="Clubface split into heel, center and toe, high, middle and low. Tap where the mark is." data-target>
+  <rect width="358" height="300" rx="16" class="t-faceback"/>
+  <g ${flip}>
+    <path d="M70 70 L52 26 L72 18 L96 72 Z" class="t-hosel"/>
+    <path d="M82 70 Q 80 252 100 262 L 306 262 Q 336 258 334 214 L 322 92 Q 316 64 290 62 L 96 66 Q 84 66 82 70 Z" class="t-face"/>
+    <g class="t-groove"><line x1="104" y1="104" x2="312" y2="102"/><line x1="104" y1="128" x2="314" y2="126"/><line x1="104" y1="152" x2="316" y2="150"/><line x1="104" y1="176" x2="318" y2="174"/><line x1="104" y1="200" x2="320" y2="198"/><line x1="106" y1="224" x2="322" y2="222"/></g>
+    <rect x="164" y="136" width="84" height="58" class="t-sweet"/>
+    <g class="t-zone"><line x1="164" y1="74" x2="164" y2="258"/><line x1="248" y1="70" x2="250" y2="258"/><line x1="90" y1="134" x2="326" y2="132"/><line x1="92" y1="194" x2="330" y2="192"/></g>
+  </g>
+  <g class="t-facelab" text-anchor="middle"><text x="126" y="288">${l}</text><text x="205" y="288">CENTER</text><text x="290" y="288">${r}</text></g>
+  <g class="t-facelab" font-size="11"><text x="10" y="108">HIGH</text><text x="10" y="168">MID</text><text x="10" y="228">LOW</text></g>
+  ${dots}${mark}
+</svg>`;
+}
+
+// ---------- shape glyph: one small flight path for a height and curve ----------
+export function shapeGlyph(h, c, hand, cls = '') {
+  const H = { high: 44, mid: 36, low: 28 }[h];
+  const peak = { high: 6, mid: 12, low: 18 }[h];
+  const dir = c === 'none' ? 0 : ((c === 'draw') === (hand !== 'left') ? -1 : 1);
+  const sx = 31 - dir * 9, ex = 31 + dir * 17;
+  return `<svg width="62" height="${H + 6}" viewBox="0 0 62 ${H + 6}" aria-hidden="true" class="${cls}"><line x1="4" y1="${H + 2}" x2="58" y2="${H + 2}" class="g-ground"/><path d="M${sx} ${H + 2} Q ${sx + dir * -4} ${peak - 4} ${ex} ${peak + 4}" fill="none" class="g-path" stroke-width="3" stroke-linecap="round"/></svg>`;
+}
