@@ -31,14 +31,19 @@ function route() {
 }
 function go(path) { location.hash = '#/' + path; }
 
+// Re-rendering after a tap keeps scroll positions; only a new route starts at the top.
+let lastPick = null;
 function render() {
   applyTheme();
   const r = route();
-  if (location.hash !== lastHash) {
-    lastHash = location.hash;
+  const same = location.hash === lastHash;
+  if (!same) {
     stopWarm(); wu.phase = 'idle';
     if (r.a !== 'warmup' || !r.b) ui.wuChain = false;
   }
+  const keep = {};
+  if (same) app.querySelectorAll('[data-keep]').forEach(el => { keep[el.dataset.keep] = el.scrollTop; });
+  const winY = window.scrollY;
   closeOverlays();
   let html;
   switch (r.a) {
@@ -53,9 +58,17 @@ function render() {
     case 'bag': html = r.b === 'how' ? bagHow() : bag(); break;
     default: html = home();
   }
-  app.innerHTML = `<main class="screen">${html}</main>`;
+  // Screens with a pinned action bar (or marked data-shell) fill exactly one screen height.
+  const shell = html.includes('class="bar') || html.includes('data-shell');
+  app.classList.toggle('shell-app', shell);
+  app.innerHTML = `<main class="screen${shell ? ' shell' : ''}">${html}</main>`;
   after(r);
-  window.scrollTo(0, 0);
+  if (same) {
+    app.querySelectorAll('[data-keep]').forEach(el => { if (keep[el.dataset.keep] != null) el.scrollTop = keep[el.dataset.keep]; });
+    window.scrollTo(0, winY);
+  } else window.scrollTo(0, 0);
+  if (r.a === 'caddy') centerPick();
+  lastHash = location.hash;
 }
 
 function after(r) {
@@ -67,6 +80,17 @@ function after(r) {
     bindWarmSwipe(r.b);
     if (ui.wuChain && wu.phase === 'idle' && !wu.t) { ui.wuChain = false; runWarm('ready', READY); }
   }
+}
+
+// Caddy: bring the recommended club to the middle of the list when the pick changes.
+function centerPick() {
+  const pick = app.querySelector('.club-row.pick');
+  const key = pick ? pick.dataset.club + '@' + S().caddy.target : null;
+  if (pick && key !== lastPick) {
+    const box = pick.closest('.scroll-y');
+    if (box) box.scrollTop += pick.getBoundingClientRect().top - box.getBoundingClientRect().top - (box.clientHeight - pick.offsetHeight) / 2;
+  }
+  lastPick = key;
 }
 
 // ---------- helpers ----------
@@ -113,7 +137,7 @@ function home() {
   let take = '';
   if (last) {
     const rc = last.kind === 'range' ? rangeRecap(last, st.bag) : last.kind === 'putt' ? puttRecap(last) : courseRecap(last);
-    take = `<a class="card dashed" href="#/${last.kind}/recap/${last.id}" style="text-decoration:none;color:inherit"><span class="lbl">Last takeaway · ${fmtDate(last.ended)}</span><span>${esc(rc.headline)}. ${esc(rc.lines[0] || rc.cause || '')}</span></a>`;
+    take = `<a class="card dashed mini clamp2" href="#/${last.kind}/recap/${last.id}" style="text-decoration:none;color:inherit"><span class="lbl">Last takeaway · ${fmtDate(last.ended)}</span><span>${esc(rc.headline)}. ${esc(rc.lines[0] || rc.cause || '')}</span></a>`;
   }
   const c = st.conditions;
   const active = st.active ? `<a class="card hero" href="#/${st.active.kind}/log" style="text-decoration:none"><span class="lbl">In progress</span><span class="h2">Resume ${st.active.kind === 'range' ? 'range session' : st.active.kind === 'putt' ? 'putting session' : 'round'} ›</span></a>` : '';
@@ -122,18 +146,22 @@ function home() {
     <div class="top"><span class="wordmark">${insignia(40)}<span>COACH CADDY</span></span><span style="display:flex;gap:8px">${themeBtn()}<a class="pill-link" href="#/bag">My bag</a></span></div>
     <p class="tag">${TAG}</p>
   </header>
+  <div class="scroll-y home-body" data-shell data-keep="home">
   <a class="warm-link" href="#/warmup/${WARMUP[0].id}">${drillGlyph('stretch')}<span class="grow"><b>Warm up first</b><span class="muted">${WARMUP.length} moves · about 4 min</span></span><span class="chev">›</span></a>
   <p class="prompt">Practice or Play?</p>
   ${active}
+  <div class="home-tiles">
   <a class="tile scene" href="#/practice">${rangeScene()}<span class="scrim"></span><span class="mat"></span>${golferGlyph(104, 'g-gold on-mat', '#276446')}
     <span class="lbl">Range · Putting · Course</span><h2 class="one-line">Coach: Practice</h2>
     <span class="readout">${shots.length ? `${shots.length} shots${solid != null ? ` · ${solid}% solid` : ''}` : 'Start logging to see your numbers'}</span></a>
   <a class="tile scene" href="#/play">${fairwayScene()}<span class="scrim"></span>${caddyGlyph(136, 'g-gold at-bottom', '#23603F')}
     <span class="lbl">On the course</span><h2 class="one-line">Caddy: Play</h2>
     <span class="readout">${c.set ? `${c.temp}°F · ${c.moisture} · ${tempSummary(c)}` : 'Conditions, carries and every lie'}</span></a>
-  ${top.length ? `<a class="card" href="#/bag" style="text-decoration:none;color:inherit"><span class="lbl">Most reliable right now</span><div class="chips">${top.map(([id, v]) => `<span class="chip gold" style="display:flex;align-items:center">★ ${esc(club(id).name)} ${v.score}</span>`).join('')}</div></a>`
-    : `<a class="card" href="#/bag" style="text-decoration:none;color:inherit"><span class="lbl">Club reliability</span>${relWait(rel)}</a>`}
-  ${take}`;
+  </div>
+  ${top.length ? `<a class="card mini" href="#/bag" style="text-decoration:none;color:inherit"><span class="lbl">Most reliable right now</span><div class="chips one-line-chips">${top.map(([id, v]) => `<span class="chip gold" style="display:flex;align-items:center">★ ${esc(club(id).name)} ${v.score}</span>`).join('')}</div></a>`
+    : `<a class="card mini" href="#/bag" style="text-decoration:none;color:inherit"><span class="lbl">Club reliability</span>${relWait(rel)}</a>`}
+  ${take}
+  </div>`;
 }
 
 // ---------- practice ----------
@@ -141,16 +169,17 @@ function practice() {
   const plan = S().plan;
   return `
   <div class="top">${back('', 'Home')}${themeBtn()}</div>
-  <div style="display:flex;align-items:center;gap:10px">${golferGlyph(46, 'g-brand')}<h1>Coach: Practice</h1></div>
+  <div class="title-row">${golferGlyph(46, 'g-brand')}<h1>Coach: Practice</h1></div>
+  <div class="scroll-y" data-shell data-keep="practice">
   ${scienceCard('flight')}
   <a class="row-link" href="#/warmup">${drillGlyph('stretch')}<span class="grow"><span class="name">Warm-up</span><span class="muted">5 moves, about 4 minutes</span></span><span class="chev">›</span></a>
   <a class="row-link" href="#/range">${drillGlyph('traj')}<span class="grow"><span class="name">Range</span><span class="muted">Drills, tap ball and grass</span></span><span class="chev">›</span></a>
   <a class="row-link" href="#/putt">${drillGlyph('pworld')}<span class="grow"><span class="name">Putting</span><span class="muted">Line, speed, pressure</span></span><span class="chev">›</span></a>
   <a class="row-link" href="#/course">${drillGlyph('flag')}<span class="grow"><span class="name">Course</span><span class="muted">Log a round, find the leaks</span></span><span class="chev">›</span></a>
-  <div class="spacer"></div>
-  ${plan ? `<div class="card hero"><span class="lbl">Your plan${plan.from ? ' · ' + esc(plan.from) : ''}</span>
+  </div>
+  ${plan ? `<div class="bar"><div class="card hero"><span class="lbl">Your plan${plan.from ? ' · ' + esc(plan.from) : ''}</span>
     <span>${plan.range && plan.range.length ? 'Range: ' + plan.range.map(id => esc(drillById(id).name)).join(', ') : ''}${plan.putt && plan.putt.length ? `<br>Putting: ${plan.putt.map(id => esc(drillById(id).name)).join(', ')}` : ''}</span>
-    <div class="btn-row">${plan.range && plan.range.length ? '<a class="btn goldbtn" href="#/range">Range plan</a>' : ''}${plan.putt && plan.putt.length ? '<a class="btn sec" href="#/putt" style="border-color:var(--heroInk);color:var(--heroInk);background:transparent">Putting plan</a>' : ''}</div></div>` : ''}`;
+    <div class="btn-row">${plan.range && plan.range.length ? '<a class="btn goldbtn" href="#/range">Range plan</a>' : ''}${plan.putt && plan.putt.length ? '<a class="btn sec" href="#/putt" style="border-color:var(--heroInk);color:var(--heroInk);background:transparent">Putting plan</a>' : ''}</div></div></div>` : ''}`;
 }
 
 // ---------- warm-up ----------
@@ -207,11 +236,12 @@ function warmList() {
   return `
   <div class="top">${back('practice', 'Practice')}${themeBtn()}</div>
   <h1>Pre-round warm-up</h1>
+  <div class="scroll-y" data-keep="wlist">
   <p class="helper">Five moves, 45 seconds each, to wake up your hips, spine and shoulders before your first swing. Swipe through the cards, or check Auto-advance and the routine runs hands-free.</p>
   <div class="stat-row"><div class="stat"><b>${WARMUP.length}</b><span>Moves</span></div><div class="stat"><b>${fmtS(WORK)}</b><span>Each</span></div><div class="stat"><b>${mins}</b><span>Minutes</span></div></div>
   ${WARMUP.map((m, i) => `<a class="row-link" href="#/warmup/${m.id}"><span class="wu-thumb" aria-hidden="true">${m.frames[1].svg}</span><span class="grow"><span class="name">${i + 1}. ${esc(m.name)}</span><span class="muted">${esc(m.targets.join(', '))}</span></span><span class="chev">›</span></a>`).join('')}
-  <div class="spacer"></div>
-  <button class="btn pri" data-act="warmRoutine">Start routine</button>`;
+  </div>
+  <div class="bar"><button class="btn pri" data-act="warmRoutine">Start routine</button></div>`;
 }
 
 function warmMove(id) {
@@ -222,6 +252,7 @@ function warmMove(id) {
   ui.wuLast = i;
   return `
   <div class="top">${back('warmup', 'Warm-up')}<span class="wu-dots" role="img" aria-label="Card ${i + 1} of ${WARMUP.length}">${WARMUP.map((_, j) => `<span class="${j === i ? 'on' : j < i ? 'past' : ''}"></span>`).join('')}</span><span class="wu-time mono" id="wuTime">${fmtS(WORK)}</span></div>
+  <div class="scroll-y wu-body" data-keep="wmove-${id}">
   <div class="wu-slide ${dir}" id="wuSlide">
   <div class="wu-head"><span class="lbl">Move ${i + 1} of ${WARMUP.length}</span><h1>${esc(m.name)}</h1>
     <div class="chips">${m.targets.map(t => `<span class="badge plain">${esc(t)}</span>`).join('')}</div>
@@ -231,11 +262,13 @@ function warmMove(id) {
   <ol class="wu-cues">${m.cues.map(c => `<li>${esc(c)}</li>`).join('')}</ol>
   <div class="card soft"><span class="lbl t-gold">Coach tip</span><span>${esc(m.tip)}</span></div>
   </div>
-  <div class="spacer"></div>
+  </div>
+  <div class="bar">
   <label class="wu-auto"><input type="checkbox" data-warmauto ${S().warmAuto ? 'checked' : ''}><span class="grow"><b>Auto-advance</b><span class="muted">${next ? `When the timer ends, start ${esc(next.name)}` : 'Last move of the warm-up'}</span></span></label>
   <div class="btn-row"><button class="btn pri" id="wuGo" data-act="warmGo">Start ${fmtS(WORK)}</button>${next
     ? `<a class="btn sec wu-next" href="#/warmup/${next.id}" aria-label="Next move: ${esc(next.name)}">›</a>`
-    : `<a class="btn sec wu-next" href="#/" aria-label="Finish warm-up and go home">✓</a>`}</div>`;
+    : `<a class="btn sec wu-next" href="#/" aria-label="Finish warm-up and go home">✓</a>`}</div>
+  </div>`;
 }
 
 // Swipe left or right across a card to move between them, like slides.
@@ -265,15 +298,16 @@ function rangePick() {
   return `
   <div class="top">${back('practice', 'Practice')}${themeBtn()}</div>
   <h1>Range session</h1>
+  <div class="scroll-y" data-keep="rpick">
   ${scienceCard('lowpoint')}
-  <div class="chips scroll">${cats.map(c => `<button class="chip ${c === cat ? 'on' : ''}" data-act="rangeCat" data-v="${c}">${c}</button>`).join('')}</div>
+  <div class="chips scroll sticky-chips">${cats.map(c => `<button class="chip ${c === cat ? 'on' : ''}" data-act="rangeCat" data-v="${c}">${c}</button>`).join('')}</div>
   ${list.map(d => {
     const on = ui.rangePick.has(d.id);
     return `<div class="drill ${on ? 'on' : ''}" role="button" tabindex="0" data-act="pickRange" data-v="${d.id}" aria-pressed="${on}">${drillGlyph(d.glyph)}
       <span class="grow"><span class="name-row"><span class="name">${esc(d.name)}</span>${ytLink(d)}</span><span class="meta">${esc(d.trains)} · ${d.balls} balls · ${esc(club(d.club).name)}, ${esc(shotType(d.type).name.toLowerCase())}</span>${on ? `<span class="how">${esc(d.how)}</span>` : ''}</span>${on ? checkOn : checkOff}</div>`;
   }).join('')}
-  <div class="spacer"></div>
-  <button class="btn pri" data-act="startRange" ${n ? '' : 'disabled style="opacity:.5"'}>Start · ${n} drill${n === 1 ? '' : 's'} · ${balls} balls</button>`;
+  </div>
+  <div class="bar"><button class="btn pri" data-act="startRange" ${n ? '' : 'disabled style="opacity:.5"'}>Start · ${n} drill${n === 1 ? '' : 's'} · ${balls} balls</button></div>`;
 }
 
 // ---------- range: logger ----------
@@ -300,10 +334,17 @@ function draftPart(pd) {
     : null;
   return { contact: pd.contact || null, finish, curve: pd.curve || null, carry: pd.carry != null ? pd.carry : null, x: pd.x != null ? pd.x : null, y: pd.y != null ? pd.y : null };
 }
-const OUT_CONTACT = [['pure', 'Pure'], ['thin', 'Thin'], ['chunk', 'Chunk'], ['heel', 'Heel'], ['toe', 'Toe']];
+const OUT_CONTACT = [['pure', 'Pure'], ['thin', 'Thin'], ['chunk', 'Chunk', 'Fat'], ['heel', 'Heel'], ['toe', 'Toe']];
 function outRow(label, act, opts, cur) {
-  return `<div class="out-row"><span class="lbl">${label}</span><div class="out-chips" style="--n:${opts.length}">${opts.map(([v, txt]) =>
-    `<button class="chip sq ${cur === v ? 'on' : ''}" data-act="${act}" data-v="${v}" aria-pressed="${cur === v}">${txt}</button>`).join('')}</div></div>`;
+  return `<div class="out-row"><span class="lbl">${label}</span><div class="out-chips" style="--n:${opts.length}">${opts.map(([v, txt, short]) =>
+    `<button class="chip sq ${cur === v ? 'on' : ''}" data-act="${act}" data-v="${v}" aria-pressed="${cur === v}" aria-label="${txt}">${short ? (v === 'chunk' ? `<span class="xs-hide">${txt}</span><span class="xs-only">${short}</span>` : `<span class="wide-only">${txt}</span><span class="narrow-only">${short}</span>`) : txt}</button>`).join('')}</div></div>`;
+}
+
+// Logger header: End, drill name (truncates), progress, and next drill, all in one row.
+function logTop(endAct, d, progress, nextAct, more) {
+  return `<div class="logtop"><button class="back" data-act="${endAct}">End</button>
+    <div class="lt-mid"><span class="lt-line"><span class="lt-name">${esc(d.name)}</span>${ytLink(d, true)}</span><span class="lt-sub">${progress}</span></div>
+    <button class="back lt-next" data-act="${nextAct}">${more ? 'Next drill ›' : 'Finish ›'}</button></div>`;
 }
 
 function rangeLog() {
@@ -320,24 +361,28 @@ function rangeLog() {
   const has = hasDraft(pend);
   const draft = { view, height: pend.height || null, ...draftPart(pend) };
   const lenOpts = view === 'woods' ? [['short', 'Short'], ['pin', 'Normal'], ['long', 'Long']] : [['short', 'Short'], ['pin', 'Pin high'], ['long', 'Long']];
-  const dirOpts = view === 'woods' ? [['obL', 'OB L'], ['left', 'Left'], ['line', 'Fairway'], ['right', 'Right'], ['obR', 'OB R']] : [['left', 'Left'], ['line', 'On line'], ['right', 'Right']];
-  const heightRow = st.height ? `<div class="grid3">${['low', 'mid', 'high'].map(h => `<button class="chip sq ${pend.height === h ? 'on' : ''}" data-act="height" data-v="${h}">${h[0].toUpperCase() + h.slice(1)}</button>`).join('')}</div>` : '';
-  const curveRow = st.curve ? `<div class="chips">${['hook', 'draw', 'none', 'fade', 'slice'].map(c => `<button class="chip ${pend.curve === c ? 'on' : ''}" data-act="curve" data-v="${c}">${c === 'none' ? 'Straight' : c[0].toUpperCase() + c.slice(1)}</button>`).join('')}</div>` : '';
+  const dirOpts = view === 'woods' ? [['obL', 'OB L'], ['left', 'Left'], ['line', 'Fairway', 'Fwy'], ['right', 'Right'], ['obR', 'OB R']] : [['left', 'Left'], ['line', 'On line'], ['right', 'Right']];
+  const heightRow = st.height ? outRow('Height', 'height', [['low', 'Low'], ['mid', 'Mid'], ['high', 'High']], pend.height) : '';
+  const curveRow = st.curve ? outRow('Curve', 'curve', [['hook', 'Hook'], ['draw', 'Draw'], ['none', 'Straight', 'Str.'], ['fade', 'Fade'], ['slice', 'Slice']], pend.curve) : '';
   return `
-  <div class="top"><button class="back" data-act="endRange">End</button><span class="title-sm">${esc(d.name)}${ytLink(d, true)}</span><span class="muted mono">${done}/${d.balls}</span></div>
+  ${logTop('endRange', d, `${done}/${d.balls} balls`, 'nextDrill', a.di < a.drills.length - 1)}
+  <div class="scroll-y log-body" data-keep="rlog">
   <button class="setup-row" data-act="openShotSetup"><span><b>${esc(cl.name)}</b> · ${esc(st.name)} ${rel && !rel.locked ? `<span class="badge ${rel.top ? '' : 'plain'}">${rel.top ? '★ ' : ''}${rel.score}</span>` : ''}</span><span class="muted">Change ›</span></button>
-  <div class="status ${has ? 'draft' : ''}" aria-live="polite"><span>${has ? esc(describeShot(draft)) : last ? esc(describeShot(last)) : 'Tap the ball, the grass or the rows below'}</span><span class="muted">${has ? 'This shot' : last ? `Saved #${done}` : ''}</span></div>
-  ${targetSvg(a)}
-  <p class="helper">Ball = contact · grass = length and direction · bottom row = chunk · hold the ball = topped or shank · drag = curve. All optional.</p>
+  <div class="status ${has ? 'draft' : ''}" aria-live="polite"><span>${has ? esc(describeShot(draft)) : last ? esc(describeShot(last)) : 'Tap the ball, then the grass'}</span><span class="muted">${has ? 'This shot' : last ? `Saved #${done}` : ''}</span></div>
+  <div class="target-wrap">${targetSvg(a)}</div>
+  <p class="helper opt">Ball = contact · grass = length and direction · bottom row = chunk · hold the ball = topped or shank · drag = curve. All optional.</p>
   <div class="outcome">
     ${outRow('Contact', 'setContact', OUT_CONTACT, pend.contact)}
     ${outRow('Length', 'setLen', lenOpts, pend.row)}
     ${outRow('Direction', 'setDir', dirOpts, pend.col)}
     ${heightRow}${curveRow}
   </div>
-  <button class="btn pri next-shot" data-act="nextShot" ${has ? '' : 'disabled'}>Next shot ›</button>
-  <div class="btn-row"><button class="btn sec" data-act="undo" style="flex:1">${has ? 'Clear' : 'Undo'}</button><button class="btn dash" data-act="carry" style="flex:2">${pend.carry != null ? `Carry ${pend.carry} yds` : '+ Carry yds (optional)'}</button></div>
-  <div class="btn-row"><button class="btn ghost" data-act="nextDrill">${a.di < a.drills.length - 1 ? 'Next drill ›' : 'Finish session ›'}</button></div>`;
+  </div>
+  <div class="bar"><div class="bar-row">
+    <button class="btn sec sm" data-act="undo">${has ? 'Clear' : 'Undo'}</button>
+    <button class="btn dash sm" data-act="carry" aria-label="Carry yards, optional">${pend.carry != null ? `${pend.carry} yds` : '+ Carry'}</button>
+    <button class="btn pri next-shot" data-act="nextShot" ${has ? '' : 'disabled'}>Next shot ›</button>
+  </div></div>`;
 }
 
 function shotSetupSheet() {
@@ -346,6 +391,7 @@ function shotSetupSheet() {
   const rel = reliability(S()).clubs;
   return `<div class="sheet-wrap" data-act="closeSheet"><div class="sheet" role="dialog" aria-label="Club and shot type" data-stop>
     <div class="grab"></div><h2>Club and shot type</h2>
+    <div class="sheet-body">
     ${groups.map(([name, kinds]) => `<span class="lbl">${name}</span><div class="chips">${inBag().filter(c => kinds.includes(c.kind)).map(c => {
       const r = rel[c.id]; const top = r && r.top;
       return `<button class="chip ${c.id === a.club ? 'on' : ''} ${top ? 'gold' : ''}" data-act="setClub" data-v="${c.id}">${top ? '★ ' : ''}${esc(c.name)}</button>`;
@@ -353,6 +399,7 @@ function shotSetupSheet() {
     <span class="lbl">Shot type</span>
     <div class="chips">${SHOT_TYPES.map(t => `<button class="chip ${t.id === a.type ? 'on' : ''}" data-act="setType" data-v="${t.id}">${esc(t.name)}</button>`).join('')}</div>
     <div class="science">${science.trajectories}<div class="science-text"><b>${esc(shotType(a.type).name)}</b><span>Counts as a win: ${esc(shotType(a.type).win.toLowerCase())}.</span></div></div>
+    </div>
     <button class="btn pri" data-act="closeSheet">Done</button>
   </div></div>`;
 }
@@ -367,6 +414,7 @@ function rangeRecapView(id) {
   const n = sess.shots.length;
   return `
   <div class="top">${back('', 'Home')}${themeBtn()}</div>
+  <div class="scroll-y" data-keep="rrecap">
   <span class="lbl">Session recap · ${fmtDate(sess.ended)} · ${n} balls</span>
   <h1>${esc(rc.headline)}</h1>
   <div class="card">${rc.lines.map(l => `<p>${esc(l)}</p>`).join('')}<p class="muted">${esc(rc.cause)}</p></div>
@@ -374,10 +422,10 @@ function rangeRecapView(id) {
   <div class="stat-row">${['right', 'line', 'left'].map(k => `<div class="stat ${rc.dirs[k] === Math.max(rc.dirs.left, rc.dirs.right) && k !== 'line' && rc.dirs[k] > 0 ? 'hi' : ''}"><b>${rc.dirs[k]}</b><span>${k === 'line' ? 'on line' : k}</span></div>`).join('')}</div>
   ${rc.goals.length ? `<div class="card">${rc.goals.map(g => `<span><b>${esc(g.name)}:</b> ${g.hits} of ${g.n} hit the goal</span>`).join('')}</div>` : ''}
   ${rc.mainClub ? `<a class="setup-row" href="#/bag" style="text-decoration:none"><span>${esc(club(rc.mainClub).name)} reliability ${rel && !rel.locked ? `<b>${rel.score}</b>` : ''}</span>${rel && !rel.locked ? (rel.top ? '<span class="badge">★ Most reliable</span>' : '') : `<span class="locked">${lockIcon}${rel ? rel.sessions : 0} of ${RELIABILITY.sessionsRequired}</span>`}</a>` : ''}
-  <div class="spacer"></div>
   <div class="card hero"><span class="lbl">Next time</span>
-    <span>${rc.drills.map(id => `${esc(drillById(id).name)} · ${drillById(id).balls} balls`).join('<br>')}<br><span class="muted">Clubs: ${rc.focusClubs.map(esc).join(', ')}</span></span>
-    <button class="btn goldbtn" data-act="savePlan" data-kind="range" data-v="${rc.drills.join(',')}">Save plan</button></div>`;
+    <span>${rc.drills.map(id => `${esc(drillById(id).name)} · ${drillById(id).balls} balls`).join('<br>')}<br><span class="muted">Clubs: ${rc.focusClubs.map(esc).join(', ')}</span></span></div>
+  </div>
+  <div class="bar"><button class="btn goldbtn" data-act="savePlan" data-kind="range" data-v="${rc.drills.join(',')}">Save as next plan</button></div>`;
 }
 
 // ---------- putting ----------
@@ -391,15 +439,16 @@ function puttPick() {
   return `
   <div class="top">${back('practice', 'Practice')}${themeBtn()}</div>
   <h1>Putting session</h1>
+  <div class="scroll-y" data-keep="ppick">
   ${scienceCard('break')}
-  <div class="chips scroll">${cats.map(c => `<button class="chip ${c === cat ? 'on' : ''}" data-act="puttCat" data-v="${c}">${c}</button>`).join('')}</div>
+  <div class="chips scroll sticky-chips">${cats.map(c => `<button class="chip ${c === cat ? 'on' : ''}" data-act="puttCat" data-v="${c}">${c}</button>`).join('')}</div>
   ${list.map(d => {
     const on = ui.puttPick.has(d.id);
     return `<div class="drill ${on ? 'on' : ''}" role="button" tabindex="0" data-act="pickPutt" data-v="${d.id}" aria-pressed="${on}">${drillGlyph(d.glyph)}
       <span class="grow"><span class="name-row"><span class="name">${esc(d.name)}</span>${ytLink(d)}</span><span class="meta">${esc(d.trains)} · ${d.dist} ft · ${d.putts} putts</span>${on ? `<span class="how">${esc(d.how)}</span>` : ''}</span>${on ? checkOn : checkOff}</div>`;
   }).join('')}
-  <div class="spacer"></div>
-  <button class="btn pri" data-act="startPutt" ${n ? '' : 'disabled style="opacity:.5"'}>Start · ${n} drill${n === 1 ? '' : 's'} · ${putts} putts</button>`;
+  </div>
+  <div class="bar"><button class="btn pri" data-act="startPutt" ${n ? '' : 'disabled style="opacity:.5"'}>Start · ${n} drill${n === 1 ? '' : 's'} · ${putts} putts</button></div>`;
 }
 
 function puttWords(p) {
@@ -441,29 +490,34 @@ function puttLog() {
   const pd = a.ppend || {};
   const has = hasPutt(pd);
   return `
-  <div class="top"><button class="back" data-act="endPutt">End</button><span class="title-sm">${esc(d.name)}${ytLink(d, true)}</span><span class="muted mono">${mine.length}/${d.putts}</span></div>
+  ${logTop('endPutt', d, `${mine.length}/${d.putts} putts`, 'nextPuttDrill', a.di < a.drills.length - 1)}
+  <div class="scroll-y log-body" data-keep="plog">
   <button class="setup-row" data-act="openPuttSetup"><span><b>${a.dist} ft</b> · ${brkName}</span><span class="muted">Change ›</span></button>
-  <div class="status ${has ? 'draft' : ''}" aria-live="polite"><span>${has ? esc(puttWords(draftPutt(a, pd))) : last ? esc(puttWords(last)) : 'Tap the cup or where it stopped'}</span><span class="muted">${has ? 'This putt' : `Made ${made} of ${mine.length}`}</span></div>
-  ${drawPutt(mine, a.brk, pd.made ? { x: 179, y: 150 } : pd.x != null ? pd : null)}
-  <p class="helper">Tap the cup if it dropped, or where the ball stopped. Or just pick length and direction. Gold = ideal pace.</p>
+  <div class="status ${has ? 'draft' : ''}" aria-live="polite"><span>${has ? esc(puttWords(draftPutt(a, pd))) : last ? esc(puttWords(last)) : 'Tap where the ball stopped'}</span><span class="muted">${has ? 'This putt' : `Made ${made} of ${mine.length}`}</span></div>
+  <div class="target-wrap">${drawPutt(mine, a.brk, pd.made ? { x: 179, y: 150 } : pd.x != null ? pd : null)}</div>
+  <p class="helper opt">Tap the cup if it dropped, or where the ball stopped. Or just pick length and direction. Gold = ideal pace.</p>
   <div class="outcome">
     ${outRow('Result', 'puttResult', [['made', 'Made it'], ['lip', 'Lip out']], pd.made ? 'made' : pd.lip ? 'lip' : null)}
     ${outRow('Distance', 'puttLen', [['short', 'Short'], ['long', 'Long']], pd.len)}
     ${outRow('Direction', 'puttSide', [['left', 'Left'], ['center', 'On line'], ['right', 'Right']], pd.side)}
   </div>
-  <button class="btn pri next-shot" data-act="nextPutt" ${has ? '' : 'disabled'}>Next shot ›</button>
-  <div class="btn-row"><button class="btn sec" data-act="undoPutt" style="flex:1">${has ? 'Clear' : 'Undo'}</button></div>
-  <div class="btn-row"><button class="btn ghost" data-act="nextPuttDrill">${a.di < a.drills.length - 1 ? 'Next drill ›' : 'Finish session ›'}</button></div>`;
+  </div>
+  <div class="bar"><div class="bar-row two">
+    <button class="btn sec sm" data-act="undoPutt">${has ? 'Clear' : 'Undo'}</button>
+    <button class="btn pri next-shot" data-act="nextPutt" ${has ? '' : 'disabled'}>Next shot ›</button>
+  </div></div>`;
 }
 
 function puttSetupSheet() {
   const a = S().active;
   return `<div class="sheet-wrap" data-act="closeSheet"><div class="sheet" role="dialog" aria-label="Putt setup" data-stop>
     <div class="grab"></div><h2>Distance and break</h2>
+    <div class="sheet-body">
     <span class="lbl">Distance</span>
     <div class="chips">${[3, 4, 5, 6, 8, 10, 15, 20, 25, 30, 40, 50].map(f => `<button class="chip ${f === a.dist ? 'on' : ''}" data-act="setDist" data-v="${f}">${f} ft</button>`).join('')}</div>
     <span class="lbl">Break</span>
     <div class="seg">${['left', 'straight', 'right'].map(b => `<button class="${b === a.brk ? 'on' : ''}" data-act="setBreak" data-v="${b}">${b === 'straight' ? 'Straight' : 'Breaks ' + b}</button>`).join('')}</div>
+    </div>
     <button class="btn pri" data-act="closeSheet">Done</button></div></div>`;
 }
 
@@ -473,14 +527,15 @@ function puttRecapView(id) {
   const rc = puttRecap(sess);
   return `
   <div class="top">${back('', 'Home')}${themeBtn()}</div>
+  <div class="scroll-y" data-keep="precap">
   <span class="lbl">Putting recap · ${fmtDate(sess.ended)} · ${sess.putts.length} putts</span>
   <h1>${esc(rc.headline)}</h1>
   <div class="card">${rc.lines.map(l => `<p>${esc(l)}</p>`).join('')}</div>
   ${scienceCard(rc.focus === 'break' || rc.focus === 'line' ? 'break' : 'speed')}
   ${rc.long && rc.long.n ? `<span class="lbl">15 ft and longer</span><div class="stat-row"><div class="stat ${rc.long.short >= rc.long.long ? 'hi' : ''}"><b>${rc.long.short}</b><span>Short</span></div><div class="stat ${rc.long.long > rc.long.short ? 'hi' : ''}"><b>${rc.long.long}</b><span>Long</span></div><div class="stat"><b>${rc.long.made}</b><span>Made</span></div></div>` : ''}
-  <div class="spacer"></div>
-  <div class="card hero"><span class="lbl">Next time</span><span>${rc.drills.map(id => `${esc(drillById(id).name)} · ${drillById(id).putts} putts`).join('<br>')}</span>
-    <button class="btn goldbtn" data-act="savePlan" data-kind="putt" data-v="${rc.drills.join(',')}">Save plan</button></div>`;
+  <div class="card hero"><span class="lbl">Next time</span><span>${rc.drills.map(id => `${esc(drillById(id).name)} · ${drillById(id).putts} putts`).join('<br>')}</span></div>
+  </div>
+  <div class="bar"><button class="btn goldbtn" data-act="savePlan" data-kind="putt" data-v="${rc.drills.join(',')}">Save as next plan</button></div>`;
 }
 
 // ---------- course ----------
@@ -506,6 +561,7 @@ function courseLog() {
   return `
   <div class="top">${back('practice', 'Practice')}<button class="back" data-act="finishRound" style="color:var(--brand);font-weight:700">Finish round</button></div>
   <div class="hole-nav">${a.holes.map(x => `<button class="${x.n === a.hole ? 'on' : (x.shots.length ? 'done' : '')}" data-act="hole" data-v="${x.n}">${x.n}</button>`).join('')}</div>
+  <div class="scroll-y" data-keep="course">
   <div style="display:flex;align-items:baseline;justify-content:space-between"><h1>Hole ${h.n}</h1><button class="chip" data-act="par">Par ${h.par}</button></div>
   <div class="shot-list">${h.shots.map((s, i) => `<div><span>${i + 1} · ${esc(club(s.club).name)} · ${s.from}</span><b>${s.result}</b></div>`).join('')}</div>
   <div class="card" style="border:2px solid var(--brand)">
@@ -515,8 +571,12 @@ function courseLog() {
     <span class="lbl">Result</span><div class="chips">${RESULT.map(r => `<button class="chip ${dr.result === r ? 'on' : ''}" data-act="draftResult" data-v="${r}">${r[0].toUpperCase() + r.slice(1)}</button>`).join('')}</div>
     <button class="btn pri" data-act="addShot" ${dr.result ? '' : 'disabled style="opacity:.5"'}>Log shot</button>
   </div>
-  <div class="setup-row" style="cursor:default"><b>Putts</b><span class="stepper"><button data-act="putts" data-v="-1" aria-label="One fewer putt">−</button><b>${h.putts}</b><button data-act="putts" data-v="1" aria-label="One more putt">+</button></span></div>
-  <div class="btn-row"><button class="btn sec" data-act="undoShot">Undo shot</button><button class="btn pri" data-act="nextHole">${a.hole < 18 ? 'Next hole ›' : 'Finish round'}</button></div>`;
+  </div>
+  <div class="bar"><div class="course-bar">
+    <button class="btn sec sm" data-act="undoShot">Undo</button>
+    <span class="putt-step" role="group" aria-label="Putts on this hole"><button data-act="putts" data-v="-1" aria-label="One fewer putt">−</button><span><b>${h.putts}</b><small>putt${h.putts === 1 ? '' : 's'}</small></span><button data-act="putts" data-v="1" aria-label="One more putt">+</button></span>
+    <button class="btn pri" data-act="nextHole">${a.hole < 18 ? 'Next hole ›' : 'Finish round'}</button>
+  </div></div>`;
 }
 
 function courseRecapView(id) {
@@ -526,14 +586,15 @@ function courseRecapView(id) {
   const max = Math.max(1, ...rc.buckets.map(b => b.w));
   return `
   <div class="top">${back('', 'Home')}${themeBtn()}</div>
+  <div class="scroll-y" data-keep="crecap">
   <span class="lbl">Round recap · ${fmtDate(sess.ended)} · ${rc.holes} holes · ${rc.strokes} strokes</span>
   <h1>${esc(rc.headline)}</h1>
   <div class="card">${rc.lines.map(l => `<p>${esc(l)}</p>`).join('') || '<p>No obvious leaks. Nice round.</p>'}</div>
   <div class="card soft"><span class="lbl">Where it leaked</span><div class="bars">${rc.buckets.map((b, i) => `<div class="bar-row"><span ${i === 0 ? 'style="font-weight:700"' : ''}>${b.name}</span><span class="track"><span class="fill ${i === 0 ? 'gold' : ''}" style="width:${Math.round(b.w / max * 100)}%"></span></span><span class="mono" style="text-align:right">${b.n} ${b.unit}</span></div>`).join('')}</div>
     <span class="muted" style="font-size:13px">Approach play drives most of the scoring gap between golfers (Broadie, strokes gained).</span></div>
-  <div class="spacer"></div>
-  ${rc.plan ? `<div class="card hero"><span class="lbl">Next practice</span><span>Range: ${rc.plan.range.map(i => esc(drillById(i).name)).join(', ')}<br>Putting: ${rc.plan.putt.map(i => esc(drillById(i).name)).join(', ')}</span>
-    <button class="btn goldbtn" data-act="roundPlan" data-r="${rc.plan.range.join(',')}" data-p="${rc.plan.putt.join(',')}">Add to next session</button></div>` : ''}`;
+  ${rc.plan ? `<div class="card hero"><span class="lbl">Next practice</span><span>Range: ${rc.plan.range.map(i => esc(drillById(i).name)).join(', ')}<br>Putting: ${rc.plan.putt.map(i => esc(drillById(i).name)).join(', ')}</span></div>` : ''}
+  </div>
+  ${rc.plan ? `<div class="bar"><button class="btn goldbtn" data-act="roundPlan" data-r="${rc.plan.range.join(',')}" data-p="${rc.plan.putt.join(',')}">Add to next session</button></div>` : ''}`;
 }
 
 // ---------- play ----------
@@ -541,7 +602,8 @@ function playSetup() {
   const c = S().conditions;
   return `
   <div class="top">${back('', 'Home')}${themeBtn()}</div>
-  <div class="tile hero" style="min-height:150px">${caddyGlyph(128, 'g-gold at-bottom', 'var(--hero)')}
+  <div class="scroll-y" data-keep="play">
+  <div class="tile hero cond-tile">${caddyGlyph(128, 'g-gold at-bottom', 'var(--hero)')}
     <span class="lbl">Caddy: Play</span><h2>Today’s conditions</h2><span class="readout">Set once. Carries and lies adjust from here.</span></div>
   <div style="display:flex;justify-content:space-between;align-items:baseline"><span class="lbl">Temperature</span><span class="big" style="font-size:26px">${c.temp}°F</span></div>
   <input type="range" min="30" max="105" step="1" value="${c.temp}" data-input="temp" aria-label="Temperature in °F">
@@ -552,8 +614,8 @@ function playSetup() {
   <span class="lbl">Difficulty</span>
   <div class="seg">${['easy', 'medium', 'hard'].map(m => `<button class="${c.difficulty === m ? 'on' : ''}" data-act="diff" data-v="${m}">${m[0].toUpperCase() + m.slice(1)}</button>`).join('')}</div>
   <p class="helper">${esc(DIFFICULTY[c.difficulty])}</p>
-  <div class="spacer"></div>
-  <button class="btn pri" data-act="openCaddy">Open caddy</button>`;
+  </div>
+  <div class="bar"><button class="btn pri" data-act="openCaddy">Open caddy</button></div>`;
 }
 
 function caddy() {
@@ -568,7 +630,7 @@ function caddy() {
   const rows = inBag().map(cl => {
     const r = rel.clubs[cl.id];
     const adj = adjustedCarry(cl, c, rec.choke);
-    return `<div class="club-row ${cl.id === pickId ? 'pick' : r && r.top ? 'top' : ''}"><span class="nm">${r && r.top ? '★ ' : ''}${esc(cl.name)}</span><span class="mono">${adj}</span>${relRow(r, r && r.top)}</div>`;
+    return `<div class="club-row ${cl.id === pickId ? 'pick' : r && r.top ? 'top' : ''}" data-club="${cl.id}"><span class="nm">${r && r.top ? '★ ' : ''}${esc(cl.name)}</span><span class="mono">${adj}</span>${relRow(r, r && r.top)}</div>`;
   }).join('');
   const lieTab = `
     <span class="lbl">Surface</span>
@@ -577,44 +639,44 @@ function caddy() {
     <div class="grid3">${Object.entries(SLOPES).map(([k, v]) => `<button class="chip sq ${cad.slope === k ? 'on' : ''}" data-act="slope" data-v="${k}">${v.name}</button>`).join('')}
       <button class="chip sq ${cad.steep ? 'on' : ''}" data-act="steep" aria-pressed="${cad.steep}">Steep slope</button></div>`;
   const sheetTab = `
-    <div class="table-head lbl"><span>Club</span><span>Carry</span><span>Reliability</span></div>
+    <div class="table-head lbl sticky-head"><span>Club</span><span>Carry</span><span>Reliability</span></div>
     <div style="display:flex;flex-direction:column;gap:3px">${rows}</div>
     <p class="helper">${esc(rec.notes.join(' '))}</p>`;
   return `
   <div class="top">${back('play', 'Setup')}<span class="title-sm">${caddyGlyph(30, 'g-gold')}Caddy</span>${themeBtn()}</div>
-  <div class="card" style="gap:4px">
+  <div class="card yd-card">
     <div style="display:flex;justify-content:space-between;align-items:baseline"><span class="big">${cad.target} <span class="muted" style="font-size:16px;font-family:Inter,sans-serif;font-weight:400">yds to pin</span></span><span class="lbl">10-yd steps</span></div>
     <input type="range" min="50" max="250" step="10" value="${cad.target}" data-input="target" aria-label="Yards to pin, in 10-yard steps">
     <div class="ticks"><span>50</span><span>100</span><span>150</span><span>200</span><span>250</span></div>
   </div>
-  <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;font-size:14px;column-gap:8px"><span class="muted">${c.temp}°F · ${c.moisture} · ${c.difficulty}</span><button class="back" data-act="tab" data-v="lie" style="color:var(--brand);font-weight:700;padding:8px 0">Lie: ${esc(lieName)} ›</button></div>
+  <div class="cond-line"><span class="muted">${c.temp}°F · ${c.moisture} · ${c.difficulty}</span><button class="back" data-act="tab" data-v="lie" style="color:var(--brand);font-weight:700;padding:8px 0">Lie: ${esc(lieName)} ›</button></div>
   <nav class="seg" aria-label="Caddy tabs"><button class="${sheet ? 'on' : ''}" data-act="tab" data-v="sheet" aria-current="${sheet ? 'page' : 'false'}">Cheat sheet</button><button class="${!sheet ? 'on' : ''}" data-act="tab" data-v="lie" aria-current="${!sheet ? 'page' : 'false'}">Lie</button></nav>
-  <div id="swipe" style="display:flex;flex-direction:column;gap:10px">${sheet ? sheetTab : lieTab}</div>
-  <div class="spacer"></div>
-  <div class="shotcard" aria-live="polite">
+  <div id="swipe" class="scroll-y caddy-body" data-keep="caddy-${sheet ? 'sheet' : 'lie'}">${sheet ? sheetTab : lieTab}</div>
+  <div class="bar bar-card"><div class="shotcard" aria-live="polite">
     <div style="display:flex;justify-content:space-between;align-items:baseline"><span class="h2">${rec.pick ? esc(rec.pick.c.name) + (rec.choke ? ', choked down' : ', stock swing') : 'No club fits'}</span><span class="lbl">Shot card</span></div>
     <span class="muted">Plays like ${rec.playsLike} · ${esc(rec.aim)} ${esc(rec.swing)}</span>
     <span class="muted" style="font-size:14px">${esc(rec.reason)}</span>
     ${rec.watch ? `<span class="muted" style="font-size:14px"><b style="color:var(--heroInk)">Watch:</b> ${esc(rec.watch)}</span>` : ''}
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px"><span class="ev">${rec.evidence}</span><button class="back" data-act="tab" data-v="${sheet ? 'lie' : 'sheet'}" style="color:var(--heroInk);font-weight:700">${sheet ? 'Swipe for lie ›' : '‹ Swipe for carries'}</button></div>
-  </div>`;
+  </div></div>`;
 }
 
 // ---------- bag ----------
 function bag() {
   const st = S();
   const rel = reliability(st);
+  const n3 = Math.min(rel.rangeSessions, RELIABILITY.sessionsRequired);
   const banner = !rel.anyUnlocked ? `
-    <div class="card hero" role="status">
-      <div style="display:flex;align-items:center;gap:10px"><span style="color:var(--gold)">${lockIcon}</span><span class="h2">No reliability scores yet</span></div>
-      <p class="muted">A club gets a score after <b style="color:var(--heroInk)">${RELIABILITY.sessionsRequired} practice sessions</b> with it, so one great or awful day can’t fool your caddy. Until then, the caddy picks clubs by carry alone.</p>
-      <div style="display:flex;gap:6px" aria-label="${Math.min(rel.rangeSessions, 3)} of 3 sessions logged">${[0, 1, 2].map(i => `<span style="flex:1;height:8px;border-radius:4px;background:${i < rel.rangeSessions ? 'var(--gold)' : 'var(--heroInk2)'};opacity:${i < rel.rangeSessions ? 1 : 0.35}"></span>`).join('')}</div>
-      <span class="muted mono" style="font-size:13px">${Math.min(rel.rangeSessions, 3)} of 3 range sessions logged</span>
-      <div class="btn-row"><a class="btn goldbtn" href="#/bag/how" style="min-height:46px;font-size:15px">Why three?</a><button class="btn sec" data-act="sample" style="min-height:46px;font-size:15px;background:transparent;color:var(--heroInk);border-color:var(--heroInk)">Try sample data</button></div>
+    <div class="card hero banner" role="status">
+      <div class="banner-top"><span style="color:var(--gold)">${lockIcon}</span><b>No reliability scores yet</b><span class="mono banner-n">${n3} of ${RELIABILITY.sessionsRequired}</span></div>
+      <div class="pips" aria-label="${n3} of ${RELIABILITY.sessionsRequired} sessions logged">${[0, 1, 2].map(i => `<span class="${i < rel.rangeSessions ? 'on' : ''}"></span>`).join('')}</div>
+      <p class="muted">A club is scored after ${RELIABILITY.sessionsRequired} practice sessions with it. Until then the caddy picks by carry alone.</p>
+      <div class="btn-row"><a class="btn goldbtn sm" href="#/bag/how">Why three?</a><button class="btn sec sm on-hero" data-act="sample">Try sample data</button></div>
     </div>` : '';
   return `
   <div class="top">${back('', 'Home')}${themeBtn()}</div>
-  <div style="display:flex;align-items:center;justify-content:space-between"><span style="display:flex;align-items:center;gap:10px">${bagGlyph(42, 'g-brand')}<h1>My bag</h1></span><span class="muted mono" style="font-size:12px">70°F · sea level</span></div>
+  <div class="title-row" style="justify-content:space-between"><span class="title-row">${bagGlyph(42, 'g-brand')}<h1>My bag</h1></span><span class="muted mono" style="font-size:12px">70°F · sea level</span></div>
+  <div class="scroll-y" data-keep="bag">
   <div class="seg">${['right', 'left'].map(h => `<button class="${st.hand === h ? 'on' : ''}" data-act="hand" data-v="${h}">${h === 'right' ? 'Right-handed' : 'Left-handed'}</button>`).join('')}</div>
   ${banner}
   <div class="lbl bag-grid bag-head"><span>Club</span><span>Full</span><span>Choked</span><span>Reliability</span><span></span></div>
@@ -634,9 +696,10 @@ function bag() {
       <input inputmode="numeric" data-carry="${c.id}" data-field="choked" value="${c.choked}" aria-label="${esc(c.name)} choked carry" ${c.out ? 'disabled' : ''}>
       ${relCell}${x}</div>`;
   }).join('')}</div>
-  ${(() => { const n = st.bag.filter(c => c.custom).length; return `<button class="btn dash" data-act="addClub" ${n >= MAX_CUSTOM_CLUBS ? 'disabled style="opacity:.5"' : ''}>+ Add a club&nbsp;<span class="muted" style="font-weight:400">(${n} of ${MAX_CUSTOM_CLUBS} custom)</span></button>`; })()}
   <a class="setup-row" href="#/bag/how" style="text-decoration:none"><span>How reliability works</span><span class="chev">›</span></a>
-  <div class="btn-row"><button class="btn ghost" data-act="export">Export data</button><button class="btn ghost" data-act="reset">Reset all</button></div>`;
+  <div class="btn-row"><button class="btn ghost" data-act="export">Export data</button><button class="btn ghost" data-act="reset">Reset all</button></div>
+  </div>
+  ${(() => { const n = st.bag.filter(c => c.custom).length; return `<div class="bar"><button class="btn dash" data-act="addClub" ${n >= MAX_CUSTOM_CLUBS ? 'disabled style="opacity:.5"' : ''}>+ Add a club&nbsp;<span class="muted" style="font-weight:400">(${n} of ${MAX_CUSTOM_CLUBS} custom)</span></button></div>`; })()}`;
 }
 
 function bagHow() {

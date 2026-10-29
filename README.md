@@ -4,7 +4,7 @@
 
 Coach Caddy is a golf practice and on-course companion. It runs as a home-screen web app: no app store, no accounts, no server. Everything you log stays on your phone.
 
-Version 0.1, first working iteration.
+Version 0.2.
 
 ## What's in it
 
@@ -24,7 +24,8 @@ Version 0.1, first working iteration.
   - Your top three are starred, and the caddy prefers them when two clubs can reach.
 - **My bag.** Edit full and choked carries for every club, and the loft of each wedge (PW, gap, sand and flop). Tap × to take a club out of the bag; it stays listed, crossed out in red, and the caddy stops suggesting it. Tap ↺ to put it back. Add up to 5 custom clubs with a name, type, carry and optional loft.
 - **Day and night themes.** Switch with the sun/moon button.
-- **Offline.** It works offline once loaded.
+- **One screen per view.** Every screen fits the phone it's on, from 320 px wide up. Main actions sit in a pinned bar at the bottom, long lists scroll above it, and the targets scale to the space left.
+- **Offline.** It works offline once loaded, fonts included.
 
 ## Put it on GitHub Pages
 
@@ -48,7 +49,8 @@ Open **My bag** and tap **Try sample data** to load a few weeks of practice hist
 
 | File | What it does |
 | --- | --- |
-| `index.html` | App shell and fonts |
+| `index.html` | App shell |
+| `css/fonts.css`, `fonts/` | Bundled Inter, Space Grotesk and JetBrains Mono (SIL Open Font License), so the app looks the same offline |
 | `css/styles.css` | Day and night themes, layout, target colors |
 | `js/data.js` | Clubs, shot types, drills, lie rules, condition constants (tune here) |
 | `js/engine.js` | Recaps, reliability scoring, caddy recommendations |
