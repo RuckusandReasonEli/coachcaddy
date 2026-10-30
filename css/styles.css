@@ -673,3 +673,23 @@ input[type=range] { width: 100%; accent-color: var(--brand); min-height: 32px; }
 .tgt.met { color: var(--brand); }
 .tgt.not { color: var(--goldInk); }
 .tgt.few { color: var(--ink2); font-weight: 400; }
+
+/* ---------- v0.5: your data (export and reset) ---------- */
+.data-card { gap: 10px; }
+.data-card .muted { font-size: 13px; line-height: 1.4; }
+.data-btns { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 8px; }
+.data-btns .btn { min-height: 44px; font-size: clamp(13px, 3.9vw, 15px); padding: 0 6px; white-space: nowrap; }
+.btn.danger-out { background: var(--sf); color: var(--red); border: 1.5px solid var(--red); }
+.btn.danger { background: var(--red); color: #FFFFFF; }
+[data-theme="night"] .btn.danger { color: #1A0B0A; }
+.btn.danger-text { color: var(--red); }
+.btn-row.bag-data { flex-wrap: wrap; }
+.btn-row.bag-data .btn { flex: 1 1 auto; font-size: 14px; padding: 0 8px; }
+.reset-modal h2 { margin: 0; font: 600 21px 'Space Grotesk', sans-serif; color: var(--ink); }
+.reset-modal .warn { display: flex; gap: 10px; align-items: center; }
+.reset-modal .warn i { flex: none; width: 34px; height: 34px; border-radius: 17px; background: var(--redSoft); color: var(--red); font: 700 18px Inter, sans-serif; font-style: normal; display: flex; align-items: center; justify-content: center; }
+.reset-modal p { margin: 0; font-size: 15px; line-height: 1.45; color: var(--ink); }
+.reset-modal .what { font-size: 13px; color: var(--ink2); }
+.reset-modal .stack { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.reset-modal .stack .btn { min-height: 48px; font-size: 16px; }
+.reset-modal .linkish { background: none; border: 0; color: var(--brand); font: 700 14px Inter, sans-serif; min-height: 44px; cursor: pointer; }

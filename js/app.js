@@ -5,6 +5,7 @@ import { viewFor, hitTest, curveFromPath, curveName, drawIrons, drawWoods, drawG
 import { describeShot, finishWords, rangeRecap, puttRecap, courseRecap, reliability, recommend, adjustedCarry, tempSummary, drillById, drillScores, clubTable, gapSuggest, targetWords, puttDrillScores } from './engine.js';
 import { esc, insignia, caddyGlyph, golferGlyph, bagGlyph, sunIcon, moonIcon, lockIcon, checkOn, checkOff, scienceCard, science, drillGlyph, toast, ytLink, openYouTube, rangeScene, fairwayScene, clubShort } from './ui.js';
 import { makeSample } from './sample.js';
+import { buildCSV, dataCounts, stamp } from './export.js';
 import { WARMUP, WARMUP_WORK as WORK, WARMUP_READY as READY } from './warmup.js';
 
 const app = document.getElementById('app');
@@ -162,7 +163,68 @@ function home() {
   ${top.length ? `<a class="card mini" href="#/bag" style="text-decoration:none;color:inherit"><span class="lbl">Most reliable right now</span><div class="chips one-line-chips">${top.map(([id, v]) => `<span class="chip gold" style="display:flex;align-items:center">★ ${esc(club(id).name)} ${v.score}</span>`).join('')}</div></a>`
     : `<a class="card mini" href="#/bag" style="text-decoration:none;color:inherit"><span class="lbl">Club reliability</span>${relWait(rel)}</a>`}
   ${take}
+  ${dataCard()}
   </div>`;
+}
+
+// ---------- your data: export and reset ----------
+function countWords(n) {
+  const parts = [];
+  if (n.sessions) parts.push(`${n.sessions} session${n.sessions === 1 ? '' : 's'}`);
+  if (n.shots) parts.push(`${n.shots} shot${n.shots === 1 ? '' : 's'}`);
+  if (n.putts) parts.push(`${n.putts} putt${n.putts === 1 ? '' : 's'}`);
+  return parts;
+}
+function dataCard() {
+  const parts = countWords(dataCounts(S()));
+  return `<div class="card data-card"><span class="lbl">Your data</span><span class="muted">Stored only on this phone. ${parts.length ? parts.join(' · ') + '.' : 'Nothing logged yet.'}</span>
+    <div class="data-btns"><button class="btn sec" data-act="exportCsv">Export data (CSV)</button><button class="btn danger-out" data-act="reset">Reset</button></div></div>`;
+}
+// The CSV goes to the share sheet where the phone offers one (the reliable route in an iPhone home-screen app), else downloads.
+async function exportCSV() {
+  const { csv, rows } = buildCSV(S());
+  const name = `coach-caddy-data-${stamp(Date.now()).replace(' ', '-').replace(':', '')}.csv`;
+  const done = () => toast(`Exported ${rows} row${rows === 1 ? '' : 's'}`);
+  try {
+    const file = new File([csv], name, { type: 'text/csv' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: 'Coach Caddy data' });
+      return done();
+    }
+  } catch (e) {
+    if (e && e.name === 'AbortError') return; // closed the share sheet
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  done();
+}
+function resetPrompt() {
+  const parts = countWords(dataCounts(S()));
+  const what = (parts.length ? `That is ${parts.join(', ')}, ` : 'That is ') + 'your bag numbers and your settings. This can\u2019t be undone.';
+  openOverlay(`<div class="modal-wrap" data-reset><div class="modal reset-modal" role="alertdialog" aria-modal="true" aria-labelledby="rsT" aria-describedby="rsQ">
+    <div class="warn"><i aria-hidden="true">!</i><h2 id="rsT">Reset Coach Caddy?</h2></div>
+    <p id="rsQ"><b>If you reset, all your data will be deleted. Are you sure?</b></p>
+    <p class="what">${esc(what)}</p>
+    <div class="stack"><button class="btn danger" data-reset="yes">Yes, delete everything</button><button class="btn sec" data-reset="cancel">Cancel</button><button class="linkish" data-reset="export">Export a copy first</button></div></div></div>`);
+  const wrap = document.querySelector('[data-reset].modal-wrap');
+  const close = () => { wrap.remove(); document.removeEventListener('keydown', esc_); };
+  const esc_ = e => { if (e.key === 'Escape') close(); };
+  document.addEventListener('keydown', esc_);
+  wrap.querySelector('[data-reset=cancel]').focus();
+  wrap.addEventListener('click', e => {
+    const b = e.target.closest('[data-reset]');
+    if (!b || b === wrap) { if (e.target === wrap) close(); return; }
+    if (b.dataset.reset === 'cancel') close();
+    else if (b.dataset.reset === 'export') exportCSV();
+    else if (b.dataset.reset === 'yes') {
+      close(); resetAll(); ui = {};
+      if (location.hash && location.hash !== '#/') go(''); else render();
+      toast('All data deleted');
+    }
+  });
 }
 
 // ---------- practice ----------
@@ -1033,7 +1095,7 @@ function bag() {
       ${relCell}${x}</div>`;
   }).join('')}</div>
   <a class="setup-row" href="#/bag/how" style="text-decoration:none"><span>How reliability works</span><span class="chev">›</span></a>
-  <div class="btn-row"><button class="btn ghost" data-act="export">Export data</button><button class="btn ghost" data-act="reset">Reset all</button></div>
+  <div class="btn-row bag-data"><button class="btn ghost" data-act="exportCsv">Export data (CSV)</button><button class="btn ghost" data-act="export">Backup (JSON)</button><button class="btn ghost danger-text" data-act="reset">Reset all</button></div>
   </div>
   ${(() => { const n = st.bag.filter(c => c.custom).length; return `<div class="bar"><button class="btn dash" data-act="addClub" ${n >= MAX_CUSTOM_CLUBS ? 'disabled style="opacity:.5"' : ''}>+ Add a club&nbsp;<span class="muted" style="font-weight:400">(${n} of ${MAX_CUSTOM_CLUBS} custom)</span></button></div>`; })()}`;
 }
@@ -1460,10 +1522,11 @@ const actions = {
   export: () => {
     const blob = new Blob([exportJSON()], { type: 'application/json' });
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob); a.download = `coach-caddy-${new Date().toISOString().slice(0, 10)}.json`;
+    a.href = URL.createObjectURL(blob); a.download = `coach-caddy-backup-${stamp(Date.now(), false)}.json`;
     document.body.appendChild(a); a.click(); a.remove();
   },
-  reset: () => { if (confirm('Erase all sessions, bag numbers and settings on this phone?')) { resetAll(); ui = {}; go(''); render(); } },
+  reset: () => resetPrompt(),
+  exportCsv: () => { exportCSV(); },
 };
 
 document.addEventListener('click', e => {

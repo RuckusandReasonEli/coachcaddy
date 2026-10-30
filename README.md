@@ -4,7 +4,7 @@
 
 Coach Caddy is a golf practice and on-course companion. It runs as a home-screen web app: no app store, no accounts, no server. Everything you log stays on your phone.
 
-Version 0.4.
+Version 0.5.
 
 ## What's in it
 
@@ -30,6 +30,10 @@ Version 0.4.
   - A club unlocks after 3 practice sessions with it.
   - Your top three are starred, and the caddy prefers them when two clubs can reach.
 - **My bag.** Edit full and choked carries for every club, and the loft of each wedge (PW, gap, sand and flop). Tap × to take a club out of the bag; it stays listed, crossed out in red, and the caddy stops suggesting it. Tap ↺ to put it back. Add up to 5 custom clubs with a name, type, carry and optional loft.
+- **Your data.** A card at the bottom of Home shows how much is stored on the phone, with two buttons:
+  - **Export data (CSV)** saves everything at that moment, including a session in progress, as one CSV file. Each row is one record (range shot, putt, course hole, course shot, club or setting), named in the first column, so it filters cleanly in Excel or Google Sheets. On iPhone the share sheet opens (Save to Files, Mail, AirDrop); elsewhere the file downloads.
+  - **Reset** asks "If you reset, all your data will be deleted. Are you sure?" Yes deletes every session, the bag, the plan and all settings, and the app starts fresh. Cancel, tapping outside or Escape changes nothing, and **Export a copy first** saves the CSV without leaving the prompt.
+  - My bag has the same two buttons plus **Backup (JSON)**, an exact copy of everything for a future restore.
 - **Day and night themes.** Switch with the sun/moon button.
 - **One screen per view.** Every screen fits the phone it's on, from 320 px wide up. Main actions sit in a pinned bar at the bottom, long lists scroll above it, and the targets scale to the space left.
 - **Offline.** It works offline once loaded, fonts included.
@@ -65,6 +69,7 @@ Open **My bag** and tap **Try sample data** to load a few weeks of practice hist
 | `js/app.js` | Screens and navigation |
 | `js/store.js` | Local storage on the phone |
 | `js/sample.js` | Sample history |
+| `js/export.js` | The CSV export: columns, wording and record types |
 | `js/details.js` | Drill details: steps, purpose, feel, If done correctly and each drill's target (edit the wording here) |
 | `js/warmup.js` | Warm-up moves, cues and their illustrations (edit moves or timings here) |
 | `sw.js`, `manifest.webmanifest`, `icons/` | Offline support and home-screen install |
