@@ -4,7 +4,7 @@
 
 Coach Caddy is a golf practice and on-course companion. It runs as a home-screen web app: no app store, no accounts, no server. Everything you log stays on your phone.
 
-Version 0.3.
+Version 0.4.
 
 ## What's in it
 
@@ -16,6 +16,7 @@ Version 0.3.
   - **Shape drills** (9-shot drill and punch shot) show a 3 × 3 grid of heights and curves. The planned shot is outlined in gold; tap the box the ball actually flew.
   - **Impact spray** shows the club face. Tap where the powder mark is; after a few balls it names your strike pattern.
   - **Play 9 on the range** plays a 9-hole card with par 3s, 4s and 5s (18 balls). The caddy picks a club for each shot, and the recap counts fairways and greens.
+- **Drill details.** Every range and putting drill has a **Details** button. It opens the card in place with the setup, numbered steps, purpose, feel, and **If done correctly**: what success looks like plus a target, such as 12 of 15 divots after the line. Tapping the card still selects the drill; Details only opens it. While logging, the ⓘ button next to the drill name opens the same details, with the YouTube link. Recaps say whether each drill's target was met.
 - **Changing clubs.** A one-row club rail sits above every logger: tap a club to switch, swipe for more. The drill's club has a gold dot and your most reliable clubs are starred. Touch and hold the rail, or tap the swing button, for the full bag and swing types. A basic session shows ball counts on each club and a "By club" breakdown in the recap.
 - **Putting practice.** 10 drills and a top-down hole logger. Tap the cup for a make or where the ball stopped, or pick distance (short or long) and direction. Lip outs are one tap. Tap **Next shot** to save. Breaking putts read as high side or low side.
 - **Course practice.** Log a round hole by hole. The recap shows where strokes leaked and builds your next practice plan.
@@ -64,6 +65,7 @@ Open **My bag** and tap **Try sample data** to load a few weeks of practice hist
 | `js/app.js` | Screens and navigation |
 | `js/store.js` | Local storage on the phone |
 | `js/sample.js` | Sample history |
+| `js/details.js` | Drill details: steps, purpose, feel, If done correctly and each drill's target (edit the wording here) |
 | `js/warmup.js` | Warm-up moves, cues and their illustrations (edit moves or timings here) |
 | `sw.js`, `manifest.webmanifest`, `icons/` | Offline support and home-screen install |
 

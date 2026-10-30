@@ -385,6 +385,7 @@ export function drillScores(sess) {
     const d = drillById(id);
     if (!d || id === BASIC.id) return;
     const tr = d.tracker || 'full';
+    const before = out.length;
     if (tr === 'full' && d.score) {
       const ans = shots.filter(s => s.check != null);
       if (ans.length) out.push({ name: d.name, value: `${d.score}: ${ans.filter(s => s.check).length} of ${ans.length}` });
@@ -411,9 +412,57 @@ export function drillScores(sess) {
       const fw = shots.filter(s => s.phase === 'tee' && s.finish && s.finish.col);
       const gr = shots.filter(s => s.phase === 'approach' && s.finish);
       out.push({ name: d.name, value: `Fairways ${fw.filter(s => s.finish.col === 'line').length} of ${fw.length} · greens ${gr.filter(s => s.finish.row === 'pin' && s.finish.col === 'line').length} of ${gr.length}` });
+    } else if (tr === 'full' && d.detail && d.detail.target.m === 'fairway') {
+      const f = shots.filter(s => s.finish && s.finish.col);
+      if (f.length) out.push({ name: d.name, value: `In the fairway: ${f.filter(s => s.finish.col === 'line').length} of ${f.length}` });
     }
+    const tg = drillTarget(d, shots);
+    if (out.length > before) out[out.length - 1].target = tg;
   });
   return out;
+}
+
+// Drill target: how many shots met the drill's goal (see details.js) and whether the target was met.
+// status: met | not | few (too few balls logged to judge).
+export function drillTarget(d, shots) {
+  const t = d && d.detail && d.detail.target;
+  if (!t) return null;
+  let pool = [], hit = 0;
+  const within = (xs, key) => { const g = {}; xs.forEach(s => { (g[s[key]] = g[s[key]] || []).push(s); });
+    return Object.values(g).filter(a => a.length >= 2).flatMap(a => { const m = a.reduce((x, s) => x + s.carry, 0) / a.length; return a.map(s => Math.abs(s.carry - m) <= 5); }); };
+  switch (t.m) {
+    case 'check': pool = shots.filter(s => s.check != null); hit = pool.filter(s => s.check).length; break;
+    case 'fairway': pool = shots.filter(s => s.finish && s.finish.col); hit = pool.filter(s => s.finish.col === 'line').length; break;
+    case 'within5': pool = shots.filter(s => s.carry != null && s.target != null); hit = pool.filter(s => Math.abs(s.carry - s.target) <= 5).length; break;
+    case 'repeat5': { const c = shots.filter(s => s.carry != null); const r = within(c, d.mode === 'grip' ? 'grip' : 'swing'); pool = r; hit = r.filter(Boolean).length; break; }
+    case 'low': pool = shots.filter(s => s.got); hit = pool.filter(s => s.got.h === 'low').length; break;
+    case 'matched': pool = shots.filter(s => s.got); hit = pool.filter(s => s.matched).length; break;
+    case 'center': pool = shots.filter(s => s.face); hit = pool.filter(s => s.face.h === 'center').length; break;
+    case 'p9': { const fw = shots.filter(s => s.phase === 'tee' && s.finish && s.finish.col), gr = shots.filter(s => s.phase === 'approach' && s.finish);
+      pool = fw.concat(gr); hit = fw.filter(s => s.finish.col === 'line').length + gr.filter(s => s.finish.row === 'pin' && s.finish.col === 'line').length; break; }
+    case 'made': pool = shots; hit = shots.filter(s => s.made).length; break;
+    case 'close3': pool = shots; hit = shots.filter(s => s.made || (s.ft != null && s.ft <= 3)).length; break;
+    case 'online': pool = shots; hit = shots.filter(s => s.made || s.side === 'center').length; break;
+  }
+  const n = pool.length;
+  const status = n < Math.ceil(t.of / 2) ? 'few' : hit / n >= t.n / t.of - 1e-9 ? 'met' : 'not';
+  return { hit, n, status, text: t.text };
+}
+export function targetWords(r) {
+  if (!r) return '';
+  return r.status === 'met' ? `Target met · ${r.text}` : r.status === 'not' ? `Not yet · target ${r.text}` : `Target ${r.text} · log more to judge`;
+}
+
+// Putting drill scores: made, and the drill target.
+export function puttDrillScores(sess) {
+  const by = {};
+  (sess.putts || []).forEach(p => { (by[p.drill] = by[p.drill] || []).push(p); });
+  return Object.entries(by).map(([id, ps]) => {
+    const d = drillById(id);
+    if (!d) return null;
+    const close = ps.filter(p => p.made || (p.ft != null && p.ft <= 3)).length;
+    return { name: d.name, value: `Made ${ps.filter(p => p.made).length} of ${ps.length}${close > ps.filter(p => p.made).length ? ` · ${close} holed or inside 3 ft` : ""}`, target: drillTarget(d, ps) };
+  }).filter(Boolean);
 }
 
 // Per-club summary for a session: balls, solid contact and which way the misses lean.

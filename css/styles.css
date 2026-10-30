@@ -633,3 +633,43 @@ input[type=range] { width: 100%; accent-color: var(--brand); min-height: 32px; }
 .score-row span { text-align: right; color: var(--ink2); }
 .gap-card { background: var(--goldSoft); border-color: var(--gold); }
 .gap-card .btn { align-self: flex-start; }
+
+/* ---------- v0.4: drill details ---------- */
+.drill.has-detail { flex-wrap: wrap; align-items: flex-start; }
+.drill.has-detail > svg:first-child { margin-top: 2px; }
+.drill.has-detail > svg:last-of-type { margin-top: 2px; }
+.dd-btn { align-self: flex-start; margin-top: 6px; display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px 0 10px; border-radius: 18px; border: 1.5px solid var(--line); background: var(--sf); color: var(--brand); font: 700 13px Inter, sans-serif; cursor: pointer; }
+.dd-btn i { font-style: normal; font-size: 11px; transition: transform .2s; }
+.dd-btn.open { background: var(--brand); border-color: var(--brand); color: var(--onBrand); }
+.dd-btn.open i { transform: rotate(180deg); }
+.dd { flex-basis: 100%; min-width: 0; display: flex; flex-direction: column; gap: 12px; margin-top: 4px; padding-top: 12px; border-top: 1px solid var(--line); cursor: default; animation: dd-in .18s ease-out; }
+@keyframes dd-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .dd { animation: none; } .dd-btn i { transition: none; } }
+.dd-setup { display: flex; flex-wrap: wrap; gap: 6px; }
+.dd-setup span { font: 600 12px 'JetBrains Mono', monospace; color: var(--ink); background: var(--sf2); border-radius: 8px; padding: 5px 8px; }
+.dd h4 { margin: 0; font: 600 11px 'JetBrains Mono', monospace; letter-spacing: .06em; text-transform: uppercase; color: var(--ink2); }
+.dd ol { margin: 0; padding: 0; list-style: none; counter-reset: s; display: flex; flex-direction: column; gap: 7px; }
+.dd ol li { counter-increment: s; display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 8px; font-size: 14px; line-height: 1.4; color: var(--ink); }
+.dd ol li::before { content: counter(s); width: 22px; height: 22px; border-radius: 11px; background: var(--brand); color: var(--onBrand); font: 700 12px Inter, sans-serif; display: flex; align-items: center; justify-content: center; }
+.dd p { margin: 0; font-size: 14px; line-height: 1.45; color: var(--ink); }
+.dd-sec { display: flex; flex-direction: column; gap: 6px; }
+.dd-feel { padding: 10px 12px; border-left: 3px solid var(--brand); background: var(--sf2); border-radius: 0 10px 10px 0; }
+.dd-feel p { font-style: italic; }
+.dd-ok { padding: 12px; border-radius: 12px; background: var(--goldSoft); border: 1.5px solid var(--gold); display: flex; flex-direction: column; gap: 6px; }
+.dd-ok h4 { color: var(--goldInk); }
+.dd-ok ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 14px; line-height: 1.4; color: var(--ink); }
+[data-theme="night"] .dd-ok ul, [data-theme="night"] .dd-ok li { color: var(--goldInk); }
+.dd-target { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 2px; padding: 8px 10px; border-radius: 10px; background: var(--sf); }
+.dd-target b { font-size: 14px; color: var(--ink); min-width: 0; }
+.dd-target span { flex: none; font: 600 11px 'JetBrains Mono', monospace; color: var(--goldInk); text-transform: uppercase; }
+.dd-foot { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 8px; }
+.dd-foot .btn { min-height: 44px; font-size: 14px; padding: 0 8px; }
+.dd-yt { display: flex; align-items: center; gap: 10px; }
+.dd-yt .muted { font-size: 13px; }
+.sheet .dd { border-top: 0; padding-top: 0; margin-top: 0; }
+.info-btn { flex: none; width: 26px; height: 26px; border-radius: 13px; border: 1.5px solid var(--brand); color: var(--brand); background: transparent; font: 700 14px Georgia, serif; display: inline-flex; align-items: center; justify-content: center; padding: 0; cursor: pointer; position: relative; }
+.info-btn::after { content: ''; position: absolute; inset: -9px; }
+.tgt { margin: -2px 0 6px; font-size: 13px; font-weight: 600; }
+.tgt.met { color: var(--brand); }
+.tgt.not { color: var(--goldInk); }
+.tgt.few { color: var(--ink2); font-weight: 400; }

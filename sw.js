@@ -1,9 +1,9 @@
 // Offline support. Bump VERSION whenever you deploy changes so phones pick them up.
-const VERSION = 'cc-v0.3.0';
+const VERSION = 'cc-v0.4.0';
 const SHELL = [
   './', './index.html', './manifest.webmanifest', './css/styles.css', './css/fonts.css',
   './fonts/inter-latin-wght-normal.woff2', './fonts/space-grotesk-latin-wght-normal.woff2', './fonts/jetbrains-mono-latin-wght-normal.woff2',
-  './js/app.js', './js/data.js', './js/store.js', './js/engine.js', './js/targets.js', './js/ui.js', './js/sample.js', './js/warmup.js',
+  './js/app.js', './js/data.js', './js/store.js', './js/engine.js', './js/targets.js', './js/ui.js', './js/sample.js', './js/warmup.js', './js/details.js',
   './icons/icon.svg', './icons/icon-192.png', './icons/apple-touch-icon.png',
 ];
 

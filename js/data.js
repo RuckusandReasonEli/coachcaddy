@@ -1,3 +1,4 @@
+import { DETAILS } from './details.js';
 // Coach Caddy reference data: clubs, shot types, drills, lie rules, condition constants.
 // Everything here is plain data so it can be tuned without touching app logic.
 
@@ -98,7 +99,7 @@ const TRACKING = {
   punch:     { tracker: 'shape', mode: 'punch' },
   play9:     { tracker: 'play9' },
 };
-RANGE_DRILLS.forEach(d => Object.assign(d, TRACKING[d.id] || { tracker: 'full' }));
+RANGE_DRILLS.forEach(d => Object.assign(d, TRACKING[d.id] || { tracker: 'full' }, { detail: DETAILS[d.id] }));
 
 // Basic range session: no drill, no ball count, any club.
 export const BASIC = { id: 'basic', name: 'Basic session', cat: 'Basic', trains: 'Anything', fixes: '', balls: null, club: '7i', type: 'full', tracker: 'full', glyph: 'traj',
@@ -137,6 +138,7 @@ export const PUTT_DRILLS = [
   { id: 'par18',   name: 'Par 18',             cat: 'Pressure', trains: 'Random practice',  dist: 15, brk: 'left',     putts: 18, glyph: 'pclock',
     how: 'Nine random holes on the putting green, par 2 each. Change distance every hole.' },
 ];
+PUTT_DRILLS.forEach(d => { d.detail = DETAILS[d.id]; });
 
 // Lie adjustments. Right-handed wording; the engine mirrors aim for lefties.
 // yds = change to the plays-like distance (positive = needs more club).
