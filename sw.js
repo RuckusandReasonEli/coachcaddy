@@ -1,9 +1,9 @@
 // Offline support. Bump VERSION whenever you deploy changes so phones pick them up.
-const VERSION = 'cc-v0.5.0';
+const VERSION = 'cc-v0.6.0';
 const SHELL = [
   './', './index.html', './manifest.webmanifest', './css/styles.css', './css/fonts.css',
   './fonts/inter-latin-wght-normal.woff2', './fonts/space-grotesk-latin-wght-normal.woff2', './fonts/jetbrains-mono-latin-wght-normal.woff2',
-  './js/app.js', './js/data.js', './js/store.js', './js/engine.js', './js/targets.js', './js/ui.js', './js/sample.js', './js/warmup.js', './js/details.js', './js/export.js',
+  './js/app.js', './js/data.js', './js/store.js', './js/engine.js', './js/targets.js', './js/ui.js', './js/sample.js', './js/warmup.js', './js/details.js', './js/export.js', './js/courses.js',
   './icons/icon.svg', './icons/icon-192.png', './icons/apple-touch-icon.png',
 ];
 
@@ -18,6 +18,7 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
+  if (new URL(req.url).origin !== self.location.origin) return; // course search and fonts go straight to the network
   // Network first for the app itself so updates show up; fall back to cache offline.
   e.respondWith(
     fetch(req).then(res => {

@@ -240,6 +240,76 @@ export function courseRecap(session) {
   return { headline, lines, buckets, plan, strokes, holes: holes.length };
 }
 
+// ---------- play a round ----------
+// A round hole: { n, par, yds, hcp, strokes, putts, fw ('fairway'|'left'|'right'|null), pen, caddy: [calls], done }.
+export const gir = h => h.strokes != null && h.putts != null && h.par ? h.strokes - h.putts <= h.par - 2 : null;
+export function scoreWord(strokes, par) {
+  if (strokes == null || !par) return '';
+  if (strokes === 1) return 'Hole in one';
+  return { '-3': 'Albatross', '-2': 'Eagle', '-1': 'Birdie', 0: 'Par', 1: 'Bogey', 2: 'Double bogey', 3: 'Triple bogey' }[strokes - par] || `+${strokes - par}`;
+}
+export const toParText = n => n === 0 ? 'E' : n > 0 ? `+${n}` : String(n);
+export function lieWords(c) {
+  const sf = (SURFACES[c.surface] && SURFACES[c.surface].name) || c.surface;
+  if (!c.slope || c.slope === 'flat') return `${sf}, flat`;
+  const sl = (SLOPES[c.slope] && SLOPES[c.slope].name || c.slope).toLowerCase();
+  return `${sf}, ${sl}${c.steep ? ' (steep)' : ''}`;
+}
+
+export function roundSummary(sess) {
+  const holes = sess.holes || [];
+  const done = holes.filter(h => h.strokes != null);
+  const strokes = done.reduce((a, h) => a + h.strokes, 0);
+  const par = done.reduce((a, h) => a + (h.par || 0), 0);
+  const half = arr => arr.filter(h => h.strokes != null).reduce((a, h) => a + h.strokes, 0);
+  const front = holes.length > 9 ? half(holes.slice(0, 9)) : null, back = holes.length > 9 ? half(holes.slice(9)) : null;
+  const fwHoles = done.filter(h => h.par > 3 && h.fw);
+  const girHoles = done.filter(h => gir(h) != null);
+  const girHit = girHoles.filter(h => gir(h));
+  const puttHoles = done.filter(h => h.putts != null);
+  const putts = puttHoles.reduce((a, h) => a + h.putts, 0);
+  const pens = done.reduce((a, h) => a + (h.pen || 0), 0);
+  const byPar = {};
+  [3, 4, 5].forEach(p => { const xs = done.filter(h => h.par === p); if (xs.length) byPar[p] = Math.round(xs.reduce((a, h) => a + h.strokes, 0) / xs.length * 10) / 10; });
+  // Caddy calls, grouped by lie.
+  const calls = holes.flatMap(h => (h.caddy || []).map(c => ({ ...c, hole: h.n })));
+  const lies = {};
+  calls.forEach(c => { const k = lieWords(c); (lies[k] = lies[k] || []).push(c); });
+  const lieGroups = Object.entries(lies).map(([lie, cs]) => ({ lie, calls: cs })).sort((a, b) => b.calls.length - a.calls.length);
+  const marked = calls.filter(c => c.result);
+  // Where strokes leaked, the same buckets as the course recap.
+  const missedGir = girHoles.filter(h => !gir(h));
+  const three = puttHoles.filter(h => h.putts >= 3).length;
+  const teeMiss = fwHoles.filter(h => h.fw !== 'fairway').length;
+  const noSave = missedGir.filter(h => h.strokes > h.par).length;
+  const buckets = [
+    { id: 'approach', name: 'Approach', w: missedGir.length },
+    { id: 'putting', name: 'Putting', w: three * 1.5 },
+    { id: 'tee', name: 'Off the tee', w: pens * 1.5 + teeMiss * 0.4 },
+    { id: 'short', name: 'Short game', w: noSave * 0.8 },
+  ].sort((a, b) => b.w - a.w);
+  const leak = buckets[0];
+  const plan = {
+    approach: { range: ['gapping', 'ladder'], putt: ['pladder'] },
+    putting: { range: ['play9'], putt: ['pladder', 'plag'] },
+    tee: { range: ['fairway', 'gate'], putt: ['pclock'] },
+    short: { range: ['ladder', 'clock'], putt: ['pclock'] },
+  }[leak.id];
+  const lines = [];
+  if (girHoles.length) lines.push(`You hit ${girHit.length} of ${girHoles.length} greens in regulation.`);
+  if (fwHoles.length) lines.push(`${fwHoles.length - teeMiss} of ${fwHoles.length} tee shots found the fairway${pens ? `, with ${pens} penalty stroke${pens > 1 ? 's' : ''}` : ''}.`);
+  else if (pens) lines.push(`${pens} penalty stroke${pens > 1 ? 's' : ''}.`);
+  if (puttHoles.length) lines.push(`${putts} putts${three ? `, ${three} three-putt${three > 1 ? 's' : ''}` : ''}.`);
+  return {
+    played: done.length, strokes, par, toPar: strokes - par, front, back,
+    fw: { hit: fwHoles.length - teeMiss, of: fwHoles.length }, gir: { hit: girHit.length, of: girHoles.length },
+    putts, puttHoles: puttHoles.length, pens, byPar, calls, lieGroups,
+    callsOnTarget: marked.filter(c => c.result === 'on').length, callsMarked: marked.length,
+    holesWithCalls: holes.filter(h => (h.caddy || []).length).length,
+    headline: !done.length ? 'No holes scored' : leak.w === 0 ? 'Clean round' : `${leak.name} cost you most`, lines, plan,
+  };
+}
+
 // ---------- reliability ----------
 
 // Contact, direction and distance each come only from shots where that was recorded.

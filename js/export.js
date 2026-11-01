@@ -1,9 +1,9 @@
 // CSV export: everything stored on the phone at that moment, one row per record.
 // The first column, record_type, says what the row is: range_shot, putt, course_hole, course_shot, club, setting.
 import { RANGE_DRILLS, PUTT_DRILLS, SHOT_TYPES, BASIC } from './data.js';
-import { reliability } from './engine.js';
+import { reliability, gir, lieWords } from './engine.js';
 
-export const APP_VERSION = '0.5.0';
+export const APP_VERSION = '0.6.0';
 
 const COLS = [
   'record_type', 'session_id', 'session_kind', 'session_status', 'session_date', 'logged_at', 'drill',
@@ -13,6 +13,7 @@ const COLS = [
   'hole', 'par', 'strokes', 'putts', 'from', 'result',
   'full_carry', 'choked_carry', 'loft', 'in_bag', 'custom', 'reliability',
   'setting', 'value',
+  'course', 'tees', 'fairway', 'gir', 'penalties', 'plays_like_yds', 'lie', 'aim', 'caddy_result',
 ];
 
 const CONTACT = { pure: 'Pure', solid: 'Solid', thin: 'Thin', top: 'Topped', heel: 'Heel', toe: 'Toe', shank: 'Shank', under: 'Under it', skied: 'Skied', chunk: 'Chunk' };
@@ -70,6 +71,17 @@ export function buildCSV(st) {
         add({ record_type: 'putt', ...base, logged_at: stamp(p.t), drill: drillName(p.drill), putt_ft: p.dist, break: BRK[p.brk] || '',
           made: yn(!!p.made), finished_ft: p.made ? 0 : p.ft, miss: cap(miss), lip_out: yn(!!p.lip) });
       });
+    } else if (s.kind === 'round') {
+      const cbase = { ...base, course: s.course && s.course.name, tees: s.course && s.course.tee };
+      const FW = { fairway: 'Fairway', left: 'Left', right: 'Right' };
+      const RES = { on: 'On target', short: 'Short', long: 'Long', left: 'Left', right: 'Right' };
+      (s.holes || []).filter(h => h.strokes != null || (h.caddy || []).length).forEach(h => {
+        const g = gir(h);
+        add({ record_type: 'round_hole', ...cbase, hole: h.n, par: h.par, strokes: h.strokes, putts: h.putts, fairway: h.par === 3 ? '' : FW[h.fw] || '',
+          gir: g == null ? '' : yn(g), penalties: h.pen || 0, target_yds: h.yds });
+        (h.caddy || []).forEach(c => add({ record_type: 'caddy_call', ...cbase, logged_at: stamp(c.t), hole: h.n, par: h.par, target_yds: c.yards, plays_like_yds: c.playsLike,
+          lie: lieWords(c), club: c.clubName, swing: c.choke ? 'Choked down' : 'Stock swing', aim: c.aim, caddy_result: RES[c.result] || '' }));
+      });
     } else if (s.kind === 'course') {
       (s.holes || []).filter(h => h.shots.length || h.putts).forEach(h => {
         add({ record_type: 'course_hole', ...base, hole: h.n, par: h.par, strokes: h.shots.length + (h.putts || 0), putts: h.putts || 0 });
@@ -99,7 +111,8 @@ export function buildCSV(st) {
 // What a reset would delete, for the Home card and the prompt.
 export function dataCounts(st) {
   const all = (st.sessions || []).concat(st.active ? [st.active] : []);
-  const shots = all.reduce((n, s) => n + (s.shots ? s.shots.length : 0) + (s.holes ? s.holes.reduce((m, h) => m + h.shots.length, 0) : 0), 0);
+  const holeShots = h => h.shots ? h.shots.length : h.strokes != null ? Math.max(0, h.strokes - (h.putts || 0)) : 0;
+  const shots = all.reduce((n, s) => n + (s.shots ? s.shots.length : 0) + (s.holes ? s.holes.reduce((m, h) => m + holeShots(h), 0) : 0), 0);
   const putts = all.reduce((n, s) => n + (s.putts ? s.putts.length : 0) + (s.holes ? s.holes.reduce((m, h) => m + (h.putts || 0), 0) : 0), 0);
   return { sessions: all.length, shots, putts };
 }

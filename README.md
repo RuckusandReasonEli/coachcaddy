@@ -4,7 +4,7 @@
 
 Coach Caddy is a golf practice and on-course companion. It runs as a home-screen web app: no app store, no accounts, no server. Everything you log stays on your phone.
 
-Version 0.5.
+Version 0.6.
 
 ## What's in it
 
@@ -19,7 +19,12 @@ Version 0.5.
 - **Drill details.** Every range and putting drill has a **Details** button. It opens the card in place with the setup, numbered steps, purpose, feel, and **If done correctly**: what success looks like plus a target, such as 12 of 15 divots after the line. Tapping the card still selects the drill; Details only opens it. While logging, the ⓘ button next to the drill name opens the same details, with the YouTube link. Recaps say whether each drill's target was met.
 - **Changing clubs.** A one-row club rail sits above every logger: tap a club to switch, swipe for more. The drill's club has a gold dot and your most reliable clubs are starred. Touch and hold the rail, or tap the swing button, for the full bag and swing types. A basic session shows ball counts on each club and a "By club" breakdown in the recap.
 - **Putting practice.** 10 drills and a top-down hole logger. Tap the cup for a make or where the ball stopped, or pick distance (short or long) and direction. Lip outs are one tap. Tap **Next shot** to save. Breaking putts read as high side or low side.
-- **Course practice.** Log a round hole by hole. The recap shows where strokes leaked and builds your next practice plan.
+- **Play a round.** Tap **Caddy: Play** to start a round:
+  - **Pick a course** from your saved courses, or search by state and name. Course data comes from [OpenGolfAPI](https://opengolfapi.org) (OpenStreetMap community data), the same source as Mulligan Skins. The preview shows pars, handicaps and yardages per hole; pick tees and All 18, Front 9 or Back 9. Courses not in the database can be added as a custom course (par 4 everywhere until changed on the hole screen). Once added, a course is stored on the phone, so the round works offline.
+  - **One screen per hole:** strokes (with Birdie, Par, Bogey, Double shortcuts), putts, tee shot, penalties, a strip of all holes to go back and fix one, and **Finish the hole**. The last hole reads **Finish the round**.
+  - **Ask caddy** opens the caddy with the hole's yardage filled in. **Use this club** saves the call (yardage, lie, club, aim) to the hole, and tapping the saved call records how it went.
+  - **Round outline** at the end: score against par, front and back nines, a plain-language takeaway, the scorecard, fairways, greens, putts, penalties, and every caddy call grouped by lie. Save the suggested drills as your next practice plan. Past rounds are listed on the Caddy: Play screen.
+  - **Just the caddy** keeps the old way: conditions and caddy with no scorecard. Practice › Course now opens the same round flow.
 - **Plain-language recaps.** Each recap names your miss pattern and its likely cause, shows a golf-science diagram, and suggests your next drills.
 - **Caddy.** Set temperature, moisture, elevation and difficulty once. Two swipeable tabs follow:
   - **Cheat sheet:** carries adjusted for today's conditions.
@@ -31,7 +36,7 @@ Version 0.5.
   - Your top three are starred, and the caddy prefers them when two clubs can reach.
 - **My bag.** Edit full and choked carries for every club, and the loft of each wedge (PW, gap, sand and flop). Tap × to take a club out of the bag; it stays listed, crossed out in red, and the caddy stops suggesting it. Tap ↺ to put it back. Add up to 5 custom clubs with a name, type, carry and optional loft.
 - **Your data.** A card at the bottom of Home shows how much is stored on the phone, with two buttons:
-  - **Export data (CSV)** saves everything at that moment, including a session in progress, as one CSV file. Each row is one record (range shot, putt, course hole, course shot, club or setting), named in the first column, so it filters cleanly in Excel or Google Sheets. On iPhone the share sheet opens (Save to Files, Mail, AirDrop); elsewhere the file downloads.
+  - **Export data (CSV)** saves everything at that moment, including a session in progress, as one CSV file. Each row is one record (range shot, putt, round hole, caddy call, club or setting, plus older course holes and shots), named in the first column, so it filters cleanly in Excel or Google Sheets. On iPhone the share sheet opens (Save to Files, Mail, AirDrop); elsewhere the file downloads.
   - **Reset** asks "If you reset, all your data will be deleted. Are you sure?" Yes deletes every session, the bag, the plan and all settings, and the app starts fresh. Cancel, tapping outside or Escape changes nothing, and **Export a copy first** saves the CSV without leaving the prompt.
   - My bag has the same two buttons plus **Backup (JSON)**, an exact copy of everything for a future restore.
 - **Day and night themes.** Switch with the sun/moon button.
@@ -69,6 +74,7 @@ Open **My bag** and tap **Try sample data** to load a few weeks of practice hist
 | `js/app.js` | Screens and navigation |
 | `js/store.js` | Local storage on the phone |
 | `js/sample.js` | Sample history |
+| `js/courses.js` | Course search and scorecard loading from OpenGolfAPI, custom courses |
 | `js/export.js` | The CSV export: columns, wording and record types |
 | `js/details.js` | Drill details: steps, purpose, feel, If done correctly and each drill's target (edit the wording here) |
 | `js/warmup.js` | Warm-up moves, cues and their illustrations (edit moves or timings here) |

@@ -2,10 +2,11 @@
 import { S, update, uid, club, inBag, exportJSON, resetAll } from './store.js';
 import { SHOT_TYPES, RANGE_DRILLS, PUTT_DRILLS, SURFACES, SLOPES, DIFFICULTY, RELIABILITY, MAX_CUSTOM_CLUBS, BASIC, LADDER_YDS, CLOCK, NINE_SEQ, PLAY9_HOLES } from './data.js';
 import { viewFor, hitTest, curveFromPath, curveName, drawIrons, drawWoods, drawGreen, drawPutt, toViewBox, drawCarry, carryHit, drawFace, faceHit, shapeGlyph } from './targets.js';
-import { describeShot, finishWords, rangeRecap, puttRecap, courseRecap, reliability, recommend, adjustedCarry, tempSummary, drillById, drillScores, clubTable, gapSuggest, targetWords, puttDrillScores } from './engine.js';
+import { describeShot, finishWords, rangeRecap, puttRecap, courseRecap, reliability, recommend, adjustedCarry, tempSummary, drillById, drillScores, clubTable, gapSuggest, targetWords, puttDrillScores, roundSummary, gir, scoreWord, toParText, lieWords } from './engine.js';
 import { esc, insignia, caddyGlyph, golferGlyph, bagGlyph, sunIcon, moonIcon, lockIcon, checkOn, checkOff, scienceCard, science, drillGlyph, toast, ytLink, openYouTube, rangeScene, fairwayScene, clubShort } from './ui.js';
 import { makeSample } from './sample.js';
 import { buildCSV, dataCounts, stamp } from './export.js';
+import { STATES, searchCourses, loadCourse, hitName, hitLine, customCourse, courseStats } from './courses.js';
 import { WARMUP, WARMUP_WORK as WORK, WARMUP_READY as READY } from './warmup.js';
 
 const app = document.getElementById('app');
@@ -53,8 +54,9 @@ function render() {
     case 'warmup': html = r.b ? warmMove(r.b) : warmList(); break;
     case 'range': html = r.b === 'log' ? rangeLog() : r.b === 'recap' ? rangeRecapView(r.c) : rangePick(); break;
     case 'putt': html = r.b === 'log' ? puttLog() : r.b === 'recap' ? puttRecapView(r.c) : puttPick(); break;
-    case 'course': html = r.b === 'recap' ? courseRecapView(r.c) : courseLog(); break;
-    case 'play': html = playSetup(); break;
+    case 'course': html = r.b === 'recap' ? courseRecapView(r.c) : (S().active && S().active.kind === 'course') ? courseLog() : (go('play'), ''); break;
+    case 'play': html = r.b === 'course' ? coursePreview() : r.b === 'conditions' ? playSetup() : playStart(); break;
+    case 'round': html = r.b === 'recap' ? roundRecapView(r.c) : roundHole(); break;
     case 'caddy': html = caddy(); break;
     case 'bag': html = r.b === 'how' ? bagHow() : bag(); break;
     default: html = home();
@@ -77,6 +79,7 @@ function after(r) {
   if (r.a === 'range' && r.b === 'log') { bindTarget('range'); bindRail(); }
   if (r.a === 'putt' && r.b === 'log') bindTarget('putt');
   if (r.a === 'caddy') bindSwipe();
+  if (r.a === 'round' && !r.b) bindHoleStrip();
   if (r.a === 'warmup' && r.b) {
     paintWarm();
     bindWarmSwipe(r.b);
@@ -103,13 +106,15 @@ const shotType = id => SHOT_TYPES.find(t => t.id === id) || SHOT_TYPES[0];
 function finishActive() {
   const a = S().active;
   if (!a) return null;
-  const has = (a.shots && a.shots.length) || (a.putts && a.putts.length) || (a.holes && a.holes.some(h => h.shots.length || h.putts));
+  const has = (a.shots && a.shots.length) || (a.putts && a.putts.length) || (a.holes && a.holes.some(h => (h.shots && h.shots.length) || h.putts || h.strokes != null));
   update(s => {
     if (has) s.sessions.push({ ...a, ended: Date.now(), pending: undefined });
     s.active = null;
   });
   return has ? a.id : null;
 }
+
+function updHole(fn) { update(s => fn(s.active.holes[s.active.hole])); render(); }
 
 function relRow(r, top) {
   if (!r || r.locked) return `<span class="locked" title="Sessions logged with this club">${lockIcon}${r ? r.sessions : 0}/${RELIABILITY.sessionsRequired}<span class="sess"> sessions</span></span>`;
@@ -138,11 +143,11 @@ function home() {
   const last = st.sessions.slice().sort((a, b) => b.ended - a.ended)[0];
   let take = '';
   if (last) {
-    const rc = last.kind === 'range' ? rangeRecap(last, st.bag) : last.kind === 'putt' ? puttRecap(last) : courseRecap(last);
+    const rc = last.kind === 'range' ? rangeRecap(last, st.bag) : last.kind === 'putt' ? puttRecap(last) : last.kind === 'round' ? roundSummary(last) : courseRecap(last);
     take = `<a class="card dashed mini clamp2" href="#/${last.kind}/recap/${last.id}" style="text-decoration:none;color:inherit"><span class="lbl">Last takeaway · ${fmtDate(last.ended)}</span><span>${esc(rc.headline)}. ${esc(rc.lines[0] || rc.cause || '')}</span></a>`;
   }
   const c = st.conditions;
-  const active = st.active ? `<a class="card hero" href="#/${st.active.kind}/log" style="text-decoration:none"><span class="lbl">In progress</span><span class="h2">Resume ${st.active.kind === 'range' ? 'range session' : st.active.kind === 'putt' ? 'putting session' : 'round'} ›</span></a>` : '';
+  const active = st.active ? `<a class="card hero" href="#/${st.active.kind === 'round' ? 'round' : st.active.kind + '/log'}" style="text-decoration:none"><span class="lbl">In progress${st.active.kind === 'round' ? ` · ${esc(st.active.course.name)}` : ''}</span><span class="h2">Resume ${st.active.kind === 'range' ? 'range session' : st.active.kind === 'putt' ? 'putting session' : 'round'} ›</span></a>` : '';
   return `
   <header class="masthead">
     <div class="top"><span class="wordmark">${insignia(40)}<span>COACH CADDY</span></span><span style="display:flex;gap:8px">${themeBtn()}<a class="pill-link" href="#/bag">My bag</a></span></div>
@@ -227,6 +232,234 @@ function resetPrompt() {
   });
 }
 
+// ---------- play a round ----------
+// Caddy: Play opens Start a round: saved courses, a course search (OpenGolfAPI), a custom course, or Just the caddy.
+const curRound = () => { const a = S().active; return a && a.kind === 'round' ? a : null; };
+const courseById = id => (S().courses || []).find(c => c.id === id);
+const parTotal = c => c.holes.reduce((a, h) => a + (h.par || 0), 0);
+const fmtYds = n => n ? n.toLocaleString() : '';
+function courseLine(c) {
+  const where = [c.city, c.state].filter(Boolean).join(', ');
+  const p = parTotal(c), full = c.holes.every(h => h.par);
+  return [where, `${c.holes.length} holes`, full ? `Par ${p}` : ''].filter(Boolean).join(' · ');
+}
+
+function playStart() {
+  const st = S(), r = curRound();
+  const courses = (st.courses || []).slice().sort((a, b) => (b.lastPlayed || 0) - (a.lastPlayed || 0));
+  const rounds = st.sessions.filter(s => s.kind === 'round').sort((a, b) => b.ended - a.ended).slice(0, 5);
+  const f = ui.find || {};
+  return `
+  <div class="top">${back('', 'Home')}${themeBtn()}</div>
+  <div class="title-row">${caddyGlyph(46, 'g-brand')}<h1>Caddy: Play</h1></div>
+  <div class="scroll-y" data-keep="pstart">
+  ${r ? `<a class="card hero" href="#/round" style="text-decoration:none"><span class="lbl">Round in progress · ${esc(r.course.name)}</span><span class="h2">Resume on hole ${r.holes[r.hole].n} ›</span></a>` : ''}
+  ${courses.length ? `<span class="lbl">Your courses</span><div class="course-list">${courses.map(c => `<button class="course-row" data-act="pickCourse" data-v="${esc(c.id)}"><span class="grow"><b>${esc(c.name)}</b><span class="muted">${esc(courseLine(c))}${c.lastPlayed ? ` · played ${fmtDate(c.lastPlayed)}` : ''}</span></span><span class="chev">›</span></button>`).join('')}</div>` : ''}
+  <span class="lbl">Find a course</span>
+  <div class="find-row"><select id="findState" aria-label="State"><option value="">All</option>${STATES.map(s => `<option${s === (f.state != null ? f.state : st.lastState) ? ' selected' : ''}>${s}</option>`).join('')}</select>
+    <input id="findQ" type="search" placeholder="Course name" autocomplete="off" enterkeyhint="search" value="${esc(f.q || '')}" aria-label="Course name"></div>
+  <p class="helper" id="findMsg" aria-live="polite">${esc(f.msg || 'Pick a state or type at least 2 letters of a course name.')}</p>
+  <div class="course-list" id="findResults">${findResultsHtml()}</div>
+  <button class="btn dash" data-act="customCourse">+ Custom course</button>
+  <p class="attrib">Course data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> (ODbL) via <a href="https://opengolfapi.org" target="_blank" rel="noopener">OpenGolfAPI</a>. Community data, so check pars against the scorecard.</p>
+  ${rounds.length ? `<span class="lbl">Past rounds</span><div class="course-list">${rounds.map(s => { const sm = roundSummary(s); return `<a class="course-row" href="#/round/recap/${s.id}"><span class="grow"><b>${esc(s.course.name)}</b><span class="muted">${fmtDate(s.ended)} · ${sm.played} holes</span></span><span class="rd-total">${sm.strokes} <small>${toParText(sm.toPar)}</small></span></a>`; }).join('')}</div>` : ''}
+  </div>
+  <div class="bar"><button class="btn sec" data-act="justCaddy">Just the caddy · no scorecard</button></div>`;
+}
+function findResultsHtml() {
+  const hits = (ui.find && ui.find.hits) || [];
+  return hits.map((c, i) => `<button class="course-row" data-act="findHit" data-v="${i}"><span class="grow"><b>${esc(hitName(c))}</b><span class="muted">${esc(hitLine(c))}</span></span><span class="chev">›</span></button>`).join('');
+}
+let findTimer = null, findSeq = 0;
+async function runFind() {
+  const f = ui.find = ui.find || {};
+  const qEl = document.getElementById('findQ'), sEl = document.getElementById('findState');
+  if (qEl) f.q = qEl.value.trim();
+  if (sEl) f.state = sEl.value;
+  const setMsg = t => { f.msg = t; const m = document.getElementById('findMsg'); if (m) m.textContent = t; };
+  const setHits = h => { f.hits = h; const box = document.getElementById('findResults'); if (box) box.innerHTML = findResultsHtml(); };
+  if (!f.state && (f.q || '').length < 2) { setHits([]); setMsg('Pick a state or type at least 2 letters of a course name.'); return; }
+  const seq = ++findSeq;
+  setMsg('Searching…');
+  let hits;
+  try { hits = await searchCourses(f.q, f.state); }
+  catch (e) { if (seq === findSeq) { setHits([]); setMsg('Couldn’t reach the course database. Check your signal and try again, or add a custom course.'); } return; }
+  if (seq !== findSeq) return;
+  setHits(hits);
+  setMsg(hits.length ? `${hits.length}${hits.length >= 50 ? '+' : ''} course${hits.length > 1 ? 's' : ''}. Tap one to see its scorecard.${hits.length >= 50 ? ' Type more of the name to narrow it down.' : ''}` : 'No courses found. Try fewer letters, another state, or add a custom course.');
+}
+function queueFind() { clearTimeout(findTimer); findTimer = setTimeout(runFind, 400); }
+
+function previewOpen(course) {
+  const saved = (S().courses || []).find(c => c.id === course.id || (c.source && course.source && c.source.api === 'opengolfapi' && c.source.id && c.source.id === course.source.id));
+  if (saved && course !== saved && !course.custom) course = { ...course, id: saved.id, lastPlayed: saved.lastPlayed, lastTee: saved.lastTee };
+  ui.preview = JSON.parse(JSON.stringify(course));
+  ui.prevTee = course.lastTee != null && course.lastTee < course.tees.length ? course.lastTee : Math.min(1, Math.max(0, course.tees.length - 1));
+  ui.prevHoles = '18';
+  go('play/course');
+}
+
+function coursePreview() {
+  const c = ui.preview;
+  if (!c) { go('play'); return ''; }
+  const sx = courseStats(c), L = c.holes.length;
+  const saved = !!courseById(c.id);
+  const chip = (ok, okText, noText) => `<span class="chip ${ok ? 'gold' : ''}">${ok ? '✓ ' : ''}${esc(ok ? okText : noText)}</span>`;
+  const strip = (a, b) => `<div class="par-strip"><table><tr><th>Hole</th>${c.holes.slice(a, b).map((h, i) => `<th>${a + i + 1}</th>`).join('')}</tr><tr><th>Par</th>${c.holes.slice(a, b).map(h => `<td>${h.par || '–'}</td>`).join('')}</tr>${sx.hcps ? `<tr><th>Hcp</th>${c.holes.slice(a, b).map(h => `<td>${h.hcp || '–'}</td>`).join('')}</tr>` : ''}</table></div>`;
+  return `
+  <div class="top">${back('play', 'Courses')}${themeBtn()}</div>
+  <div class="scroll-y" data-keep="pcourse">
+  <div><h1 class="course-h1">${esc(c.name)}</h1><span class="muted">${esc(courseLine(c))}</span></div>
+  <div class="chips wrap-chips">${chip(sx.pars === L, 'Pars for every hole', sx.pars ? `Pars for ${sx.pars} of ${L} holes` : 'No hole pars yet')}${chip(sx.hcps >= L, 'Hole handicaps', 'No hole handicaps')}${chip(sx.yards, 'Yardage by hole', 'No hole yardages')}</div>
+  ${strip(0, Math.min(9, L))}${L > 9 ? strip(9, L) : ''}
+  ${sx.pars < L ? `<p class="helper">Holes without a par can be set on the hole screen as you play.</p>` : ''}
+  <span class="lbl">Tees</span>
+  ${c.tees.length ? `<div class="tee-row">${c.tees.map((t, i) => `<button class="tee-btn${i === ui.prevTee ? ' on' : ''}" data-act="prevTee" data-v="${i}" aria-pressed="${i === ui.prevTee}"><i class="tee-dot" style="background:${TEE_COLOR[t.color] || '#9AA3A0'}"></i><b>${esc(t.name)}</b><span>${t.total ? fmtYds(t.total) + ' yds' : 'no yardage'}</span></button>`).join('')}</div>` : `<p class="helper">No tee yardages for this course. Holes show par only, and the caddy starts from your last yardage.</p>`}
+  ${L === 18 ? `<span class="lbl">Holes</span><div class="seg">${[['18', 'All 18'], ['front', 'Front 9'], ['back', 'Back 9']].map(([v, t]) => `<button class="${ui.prevHoles === v ? 'on' : ''}" data-act="prevHoles" data-v="${v}">${t}</button>`).join('')}</div>` : ''}
+  </div>
+  <div class="bar"><button class="btn pri" data-act="coursePlay">${saved ? 'Play this course' : 'Add and play'}</button></div>`;
+}
+const TEE_COLOR = { white: '#F3F1EA', blue: '#2D6F93', gold: '#D9A636', red: '#B3261E', black: '#1B1B1B', green: '#2E7D4F', silver: '#B8BFBD' };
+
+function askCustomCourse() {
+  openOverlay(`<div class="modal-wrap"><div class="modal" role="dialog" aria-label="Custom course"><h2>Custom course</h2>
+    <label class="lbl" for="ccName">Name</label><input id="ccName" type="text" maxlength="40" placeholder="e.g. Haggin Oaks Arcade">
+    <span class="lbl">Holes</span><div class="seg" id="ccHoles"><button class="on" data-n="18">18</button><button data-n="9">9</button></div>
+    <p class="helper">Every hole starts as a par 4. Change pars on the hole screen as you play.</p>
+    <div class="btn-row"><button class="btn sec" data-modal="cancel">Cancel</button><button class="btn pri" data-modal="ok">Add course</button></div></div></div>`);
+  const wrap = document.querySelector('.modal-wrap');
+  let n = 18;
+  wrap.addEventListener('click', e => {
+    const b = e.target.closest('[data-n]');
+    if (b) { n = +b.dataset.n; wrap.querySelectorAll('[data-n]').forEach(x => x.classList.toggle('on', x === b)); return; }
+    const m = e.target.closest('[data-modal]');
+    if (!m && e.target !== wrap) return;
+    if (m && m.dataset.modal === 'ok') { const c = customCourse(document.getElementById('ccName').value.trim(), n); wrap.remove(); previewOpen(c); return; }
+    wrap.remove();
+  });
+}
+
+function startRound() {
+  const dr = ui.roundDraft, c = dr && courseById(dr.courseId);
+  if (!c) { go('play'); return; }
+  const tee = c.tees[dr.tee] || null;
+  const L = c.holes.length;
+  const idx = dr.sel === 'front' ? [...Array(9).keys()] : dr.sel === 'back' ? [...Array(9).keys()].map(i => i + 9) : [...Array(L).keys()];
+  if (S().active) finishActive();
+  update(s => {
+    s.active = { kind: 'round', id: uid(), started: Date.now(), hole: 0, cond: { ...s.conditions },
+      course: { id: c.id, name: c.name, city: c.city, state: c.state, tee: tee ? tee.name : '', sel: dr.sel },
+      holes: idx.map(i => ({ n: i + 1, par: c.holes[i].par || null, yds: tee ? tee.yds[i] || null : null, hcp: c.holes[i].hcp || null, strokes: null, putts: null, fw: null, pen: 0, caddy: [], done: false })) };
+    const sc = s.courses.find(x => x.id === c.id); if (sc) sc.lastPlayed = Date.now();
+  });
+  ui.roundDraft = null; ui.revisitFrom = null;
+  go('round');
+}
+
+function roundHole() {
+  const a = curRound();
+  if (!a) { go('play'); return ''; }
+  const h = a.holes[a.hole];
+  const sm = roundSummary(a);
+  const thru = a.holes.filter(x => x.done && x.strokes != null).length;
+  const isLast = a.hole === a.holes.length - 1;
+  const revisit = ui.revisitFrom != null;
+  const sub = [h.par ? `Par ${h.par}` : 'Par –', h.yds ? `${h.yds} yds` : '', h.hcp ? `Hcp ${h.hcp}` : ''].filter(Boolean).join(' · ');
+  const strip = a.holes.map((x, i) => { const d = x.strokes != null && x.done, rel = d && x.par ? x.strokes - x.par : null;
+    return `<button class="hs${i === a.hole ? ' on' : ''}${d ? ' done' : ''}${rel != null && rel < 0 ? ' under' : rel != null && rel > 0 ? ' over' : ''}" data-act="goHole" data-v="${i}" aria-label="Hole ${x.n}${d ? `, ${x.strokes}` : ''}"><b>${x.n}</b><span>${d ? x.strokes : '·'}</span></button>`; }).join('');
+  const word = h.strokes != null ? scoreWord(h.strokes, h.par) : 'Tap + or a score';
+  const quick = h.par ? [[-1, 'Birdie'], [0, 'Par'], [1, 'Bogey'], [2, 'Double']] : [];
+  const resWord = { on: 'On target', short: 'Short', long: 'Long', left: 'Left', right: 'Right' };
+  const editPar = !h.par || (courseById(a.course.id) || {}).custom;
+  return `
+  <div class="logtop"><button class="back" data-act="endRound">End</button>
+    <div class="lt-mid"><span class="lt-line"><span class="lt-name">Hole ${h.n}</span></span><span class="lt-sub">${esc(sub)}</span></div>
+    <span class="rd-run">${thru ? `${toParText(sm.toPar)}<small>thru ${thru}</small>` : '<small>first hole</small>'}</span></div>
+  <div class="hole-strip" data-strip role="group" aria-label="Holes">${strip}</div>
+  <div class="scroll-y log-body" data-keep="round-${a.hole}">
+  ${editPar ? `<div class="out-row"><span class="lbl">Par</span><div class="seg">${[3, 4, 5].map(p => `<button class="${h.par === p ? 'on' : ''}" data-act="setPar" data-v="${p}">${p}</button>`).join('')}</div></div>` : ''}
+  <div class="card stroke-card">
+    <div class="strokes"><button class="step" data-act="rStrokes" data-v="-1" aria-label="One stroke fewer">−</button>
+      <div class="st-num"><b>${h.strokes != null ? h.strokes : '–'}</b><span>${esc(word)}</span></div>
+      <button class="step" data-act="rStrokes" data-v="1" aria-label="One stroke more">+</button></div>
+    ${quick.length ? `<div class="quick">${quick.map(([d, t]) => `<button class="chip${h.strokes === h.par + d ? ' on' : ''}" data-act="rStrokesSet" data-v="${h.par + d}">${t}</button>`).join('')}</div>` : ''}
+  </div>
+  <div class="out-row"><span class="lbl">Putts</span><div class="seg">${[0, 1, 2, 3, 4].map(n => `<button class="${h.putts === n ? 'on' : ''}" data-act="rPutts" data-v="${n}">${n === 4 ? '4+' : n}</button>`).join('')}</div></div>
+  ${h.par !== 3 ? `<div class="out-row"><span class="lbl">Tee shot</span><div class="seg">${[['left', 'Left'], ['fairway', 'Fairway'], ['right', 'Right']].map(([v, t]) => `<button class="${h.fw === v ? 'on' : ''}" data-act="rFw" data-v="${v}">${t}</button>`).join('')}</div></div>` : ''}
+  <div class="out-row pen-row"><span class="lbl">Penalties</span><div class="pen"><button class="step sm" data-act="rPen" data-v="-1" aria-label="One penalty fewer">−</button><b>${h.pen || 0}</b><button class="step sm" data-act="rPen" data-v="1" aria-label="One penalty more">+</button></div></div>
+  <div class="card caddy-card"><button class="btn goldbtn sm" data-act="askCaddy">${caddyGlyph(24, 'g-brand')}Ask caddy${h.caddy.length ? '' : h.yds ? ` · ${h.yds} yds` : ''}</button>
+    ${h.caddy.length ? `<div class="call-chips">${h.caddy.map((c, i) => `<button class="call-chip${c.result ? ' r-' + c.result : ''}" data-act="callResult" data-v="${i}"><b>${esc(c.clubName)}${c.choke ? ', choked' : ''}</b><span>${c.yards} yds · ${esc(lieWords(c))}</span><em>${c.result ? resWord[c.result] : 'How did it go?'}</em></button>`).join('')}</div>` : `<span class="muted">Yardage and lie start from this hole. Tap Use this club in the caddy to save the call here.</span>`}
+  </div>
+  </div>
+  <div class="bar"><button class="btn pri" data-act="finishHole" ${h.strokes == null ? 'disabled style="opacity:.5"' : ''}>${revisit ? 'Save hole' : isLast ? 'Finish the round' : 'Finish the hole'}</button></div>`;
+}
+function bindHoleStrip() {
+  const strip = app.querySelector('[data-strip]'), on = strip && strip.querySelector('.hs.on');
+  if (on) strip.scrollLeft += on.getBoundingClientRect().left - strip.getBoundingClientRect().left - (strip.clientWidth - on.offsetWidth) / 2;
+}
+function confirmRound(kind) {
+  const a = curRound();
+  const scored = a.holes.filter(x => x.strokes != null).length;
+  const blank = a.holes.length - scored;
+  const end = kind === 'end';
+  const title = !scored ? 'Leave this round?' : end ? 'End the round now?' : 'Finish the round?';
+  const text = !scored ? 'Nothing is scored yet, so nothing will be saved.' : blank ? `${scored} hole${scored > 1 ? 's are' : ' is'} scored. Holes without a score are left blank.` : 'All holes are scored. You’ll see the round outline next.';
+  openOverlay(`<div class="modal-wrap"><div class="modal" role="alertdialog" aria-label="${esc(title)}"><h2>${esc(title)}</h2><p>${esc(text)}</p>
+    <div class="btn-row"><button class="btn sec" data-modal="cancel">Keep playing</button><button class="btn pri" data-modal="ok">${!scored ? 'Leave' : end ? 'End round' : 'Finish the round'}</button></div></div></div>`);
+  const wrap = document.querySelector('.modal-wrap');
+  wrap.querySelector('[data-modal=cancel]').focus();
+  wrap.addEventListener('click', e => {
+    const m = e.target.closest('[data-modal]');
+    if (!m && e.target !== wrap) return;
+    wrap.remove();
+    if (m && m.dataset.modal === 'ok') { const id = finishActive(); ui.revisitFrom = null; ui.fromHole = false; id ? go('round/recap/' + id) : go('play'); }
+  });
+}
+function callSheet(i) {
+  const a = curRound(), c = a.holes[a.hole].caddy[i];
+  const opts = [['on', 'On target'], ['short', 'Short'], ['long', 'Long'], ['left', 'Left'], ['right', 'Right']];
+  openOverlay(`<div class="sheet-wrap" data-act="closeSheet"><div class="sheet" role="dialog" aria-label="How did it go?" data-stop>
+    <div class="grab"></div><div class="sheet-title"><h2>How did it go?</h2><span class="muted">${esc(c.clubName)} · ${c.yards} yds</span></div>
+    <p class="muted">${esc(lieWords(c))} · plays like ${c.playsLike}. ${esc(c.aim || '')}</p>
+    <div class="grid3 res-grid">${opts.map(([v, t]) => `<button class="chip sq${c.result === v ? ' on' : ''}" data-act="setCallResult" data-v="${i}:${v}">${t}</button>`).join('')}<button class="chip sq" data-act="setCallResult" data-v="${i}:x">Remove call</button></div>
+    <button class="btn sec" data-act="closeSheet">Done</button></div></div>`);
+}
+
+function roundRecapView(id) {
+  const sess = S().sessions.find(s => s.id === id && s.kind === 'round');
+  if (!sess) return `<div class="top">${back('play', 'Play')}</div><h1>Round not found</h1>`;
+  const sm = roundSummary(sess);
+  const resWord = { on: 'On target', short: 'Short', long: 'Long', left: 'Left', right: 'Right' };
+  const mark = h => { if (h.strokes == null) return '<span class="sc blank">–</span>'; const d = h.par ? h.strokes - h.par : 0; return `<span class="sc${d <= -1 ? ' under' : ''}${d <= -2 ? ' eagle' : ''}${d === 1 ? ' bogey' : ''}${d >= 2 ? ' dbl' : ''}">${h.strokes}</span>`; };
+  const fwMark = h => h.par === 3 || !h.fw ? '' : h.fw === 'fairway' ? '✓' : h.fw === 'left' ? '←' : '→';
+  const girMark = h => { const g = gir(h); return g == null ? '' : g ? '✓' : '·'; };
+  const halfRow = (label, hs) => { const xs = hs.filter(h => h.strokes != null); return `<tr class="sum"><td>${label}</td><td>${hs.reduce((a, h) => a + (h.par || 0), 0)}</td><td>${xs.reduce((a, h) => a + h.strokes, 0) || '–'}</td><td>${hs.filter(h => h.putts != null).reduce((a, h) => a + h.putts, 0) || ''}</td><td></td><td></td><td></td></tr>`; };
+  const rows = hs => hs.map(h => `<tr><td>${h.n}</td><td>${h.par || '–'}</td><td>${mark(h)}</td><td>${h.putts != null ? h.putts : ''}</td><td>${fwMark(h)}</td><td>${girMark(h)}</td><td>${(h.caddy || []).length ? `<span class="cad-n">${h.caddy.length}</span>` : ''}</td></tr>`).join('');
+  const H = sess.holes, two = H.length > 9;
+  const byPar = Object.entries(sm.byPar).map(([p, v]) => `Par ${p}s ${v}`).join(' · ');
+  return `
+  <div class="top">${back('play', 'Play')}${themeBtn()}</div>
+  <div class="scroll-y" data-keep="rrecap">
+  <span class="lbl">Round · ${fmtDate(sess.ended)} · ${esc(sess.course.name)}${sess.course.tee ? ` · ${esc(sess.course.tee)} tees` : ''}</span>
+  <h1>${sm.strokes} · ${toParText(sm.toPar)}</h1>
+  <span class="muted">${sm.front != null && sm.back != null ? `Front ${sm.front || '–'}, back ${sm.back || '–'} · ` : ''}${sm.played} of ${H.length} holes scored</span>
+  <div class="card"><span class="h2" style="font-size:20px">${esc(sm.headline)}</span>${sm.lines.map(l => `<p>${esc(l)}</p>`).join('')}</div>
+  <div class="card score-card"><span class="lbl">Scorecard</span><table class="sc-table"><tr><th>Hole</th><th>Par</th><th>Score</th><th>Putts</th><th>Fwy</th><th>GIR</th><th>Caddy</th></tr>
+    ${two ? rows(H.slice(0, 9)) + halfRow('Out', H.slice(0, 9)) + rows(H.slice(9)) + halfRow('In', H.slice(9)) : rows(H)}
+    <tr class="sum tot"><td>Total</td><td>${H.reduce((a, h) => a + (h.par || 0), 0)}</td><td>${sm.strokes}</td><td>${sm.putts || ''}</td><td></td><td></td><td></td></tr></table>
+    <span class="muted key">Birdies circled, bogeys boxed. Fwy ← → shows the miss side.</span></div>
+  <div class="stat-row stat4"><div class="stat"><b>${sm.fw.of ? `${sm.fw.hit}/${sm.fw.of}` : '–'}</b><span>Fairways</span></div><div class="stat"><b>${sm.gir.of ? `${sm.gir.hit}/${sm.gir.of}` : '–'}</b><span>Greens</span></div><div class="stat"><b>${sm.puttHoles ? sm.putts : '–'}</b><span>Putts</span></div><div class="stat"><b>${sm.pens}</b><span>Penalties</span></div></div>
+  ${byPar ? `<p class="muted" style="text-align:center">Average score: ${byPar}</p>` : ''}
+  <div class="card caddy-sum"><span class="lbl">Caddy calls by lie</span>
+    ${sm.calls.length ? `<p class="muted">Caddy used ${sm.calls.length} time${sm.calls.length > 1 ? 's' : ''} on ${sm.holesWithCalls} hole${sm.holesWithCalls > 1 ? 's' : ''} · ${sm.lieGroups.length} lie${sm.lieGroups.length > 1 ? 's' : ''}${sm.callsMarked ? ` · ${sm.callsOnTarget} of ${sm.callsMarked} marked on target` : ''}</p>
+      ${sm.lieGroups.map(g => `<div class="lie-group"><b>${esc(g.lie)}</b>${g.calls.map(c => `<div class="call-row"><span>Hole ${c.hole}</span><span>${c.yards} <small>(${c.playsLike})</small></span><span>${esc(c.clubName)}${c.choke ? ', choked' : ''}</span><span class="res ${c.result || ''}">${c.result ? resWord[c.result] : '–'}</span></div>`).join('')}</div>`).join('')}`
+    : `<p class="muted">The caddy wasn’t used this round.</p>`}
+  </div>
+  <button class="btn ghost" data-act="exportCsv">Export data (CSV)</button>
+  </div>
+  ${sm.played ? `<div class="bar"><button class="btn goldbtn" data-act="roundPlan" data-r="${sm.plan.range.join(',')}" data-p="${sm.plan.putt.join(',')}">Save as next practice plan</button></div>` : ''}`;
+}
+
 // ---------- practice ----------
 function practice() {
   const plan = S().plan;
@@ -238,7 +471,7 @@ function practice() {
   <a class="row-link" href="#/warmup">${drillGlyph('stretch')}<span class="grow"><span class="name">Warm-up</span><span class="muted">5 moves, about 4 minutes</span></span><span class="chev">›</span></a>
   <a class="row-link" href="#/range">${drillGlyph('traj')}<span class="grow"><span class="name">Range</span><span class="muted">Drills, tap ball and grass</span></span><span class="chev">›</span></a>
   <a class="row-link" href="#/putt">${drillGlyph('pworld')}<span class="grow"><span class="name">Putting</span><span class="muted">Line, speed, pressure</span></span><span class="chev">›</span></a>
-  <a class="row-link" href="#/course">${drillGlyph('flag')}<span class="grow"><span class="name">Course</span><span class="muted">Log a round, find the leaks</span></span><span class="chev">›</span></a>
+  <a class="row-link" href="#/play">${drillGlyph('flag')}<span class="grow"><span class="name">Course</span><span class="muted">Play or log a round, find the leaks</span></span><span class="chev">›</span></a>
   </div>
   ${plan ? `<div class="bar"><div class="card hero"><span class="lbl">Your plan${plan.from ? ' · ' + esc(plan.from) : ''}</span>
     <span>${plan.range && plan.range.length ? 'Range: ' + plan.range.map(id => esc(drillById(id).name)).join(', ') : ''}${plan.putt && plan.putt.length ? `<br>Putting: ${plan.putt.map(id => esc(drillById(id).name)).join(', ')}` : ''}</span>
@@ -999,10 +1232,10 @@ function courseRecapView(id) {
 function playSetup() {
   const c = S().conditions;
   return `
-  <div class="top">${back('', 'Home')}${themeBtn()}</div>
+  <div class="top">${back('play', 'Courses')}${themeBtn()}</div>
   <div class="scroll-y" data-keep="play">
   <div class="tile hero cond-tile">${caddyGlyph(128, 'g-gold at-bottom', 'var(--hero)')}
-    <span class="lbl">Caddy: Play</span><h2>Today’s conditions</h2><span class="readout">Set once. Carries and lies adjust from here.</span></div>
+    <span class="lbl">${ui.roundDraft && courseById(ui.roundDraft.courseId) ? esc(courseById(ui.roundDraft.courseId).name) : 'Just the caddy'}</span><h2>Today’s conditions</h2><span class="readout">Set once. Carries and lies adjust from here.</span></div>
   <div style="display:flex;justify-content:space-between;align-items:baseline"><span class="lbl">Temperature</span><span class="big" style="font-size:26px">${c.temp}°F</span></div>
   <input type="range" min="30" max="105" step="1" value="${c.temp}" data-input="temp" aria-label="Temperature in °F">
   <span class="lbl">Moisture</span>
@@ -1013,7 +1246,7 @@ function playSetup() {
   <div class="seg">${['easy', 'medium', 'hard'].map(m => `<button class="${c.difficulty === m ? 'on' : ''}" data-act="diff" data-v="${m}">${m[0].toUpperCase() + m.slice(1)}</button>`).join('')}</div>
   <p class="helper">${esc(DIFFICULTY[c.difficulty])}</p>
   </div>
-  <div class="bar"><button class="btn pri" data-act="openCaddy">Open caddy</button></div>`;
+  <div class="bar">${ui.roundDraft ? '<button class="btn pri" data-act="teeOff">Tee off</button>' : '<button class="btn pri" data-act="openCaddy">Open caddy</button>'}</div>`;
 }
 
 function caddy() {
@@ -1025,6 +1258,7 @@ function caddy() {
   const sf = SURFACES[cad.surface], sl = SLOPES[cad.slope];
   const lieName = `${sf.name.toLowerCase()}, ${cad.slope === 'flat' ? 'flat' : sl.name.toLowerCase()}${cad.steep && cad.slope !== 'flat' ? ' (steep)' : ''}`;
   const pickId = rec.pick && rec.pick.c.id;
+  const rd = curRound(), fromHole = rd && ui.fromHole ? rd.holes[rd.hole] : null;
   const rows = inBag().map(cl => {
     const r = rel.clubs[cl.id];
     const adj = adjustedCarry(cl, c, rec.choke);
@@ -1041,7 +1275,7 @@ function caddy() {
     <div style="display:flex;flex-direction:column;gap:3px">${rows}</div>
     <p class="helper">${esc(rec.notes.join(' '))}</p>`;
   return `
-  <div class="top">${back('play', 'Setup')}<span class="title-sm">${caddyGlyph(30, 'g-gold')}Caddy</span>${themeBtn()}</div>
+  <div class="top">${fromHole ? back('round', `Hole ${fromHole.n}`) : back('play/conditions', 'Setup')}<span class="title-sm">${caddyGlyph(30, 'g-gold')}Caddy</span>${themeBtn()}</div>
   <div class="card yd-card">
     <div style="display:flex;justify-content:space-between;align-items:baseline"><span class="big">${cad.target} <span class="muted" style="font-size:16px;font-family:Inter,sans-serif;font-weight:400">yds to pin</span></span><span class="lbl">10-yd steps</span></div>
     <input type="range" min="50" max="250" step="10" value="${cad.target}" data-input="target" aria-label="Yards to pin, in 10-yard steps">
@@ -1056,6 +1290,7 @@ function caddy() {
     <span class="muted" style="font-size:14px">${esc(rec.reason)}</span>
     ${rec.watch ? `<span class="muted" style="font-size:14px"><b style="color:var(--heroInk)">Watch:</b> ${esc(rec.watch)}</span>` : ''}
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px"><span class="ev">${rec.evidence}</span><button class="back" data-act="tab" data-v="${sheet ? 'lie' : 'sheet'}" style="color:var(--heroInk);font-weight:700">${sheet ? 'Swipe for lie ›' : '‹ Swipe for carries'}</button></div>
+    ${fromHole && rec.pick ? `<button class="btn goldbtn sm use-club" data-act="useClub">Use this club · save to hole ${fromHole.n}</button>` : ''}
   </div></div>`;
 }
 
@@ -1490,7 +1725,86 @@ const actions = {
   roundPlan: (v, el) => { update(s => { s.plan = { range: el.dataset.r.split(','), putt: el.dataset.p.split(','), from: 'last round' }; }); go('practice'); },
   moist: v => { update(s => { s.conditions.moisture = v; s.conditions.set = true; }); render(); },
   diff: v => { update(s => { s.conditions.difficulty = v; s.conditions.set = true; }); render(); },
-  openCaddy: () => { update(s => { s.conditions.set = true; }); go('caddy'); },
+  openCaddy: () => { ui.fromHole = false; update(s => { s.conditions.set = true; }); go('caddy'); },
+  justCaddy: () => { ui.roundDraft = null; ui.fromHole = false; go('play/conditions'); },
+  pickCourse: v => { const c = courseById(v); if (c) previewOpen(c); },
+  findHit: async v => {
+    const hit = ui.find && ui.find.hits && ui.find.hits[+v];
+    if (!hit) return;
+    const m = document.getElementById('findMsg');
+    if (m) m.textContent = `Loading ${hitName(hit)}…`;
+    const c = await loadCourse(hit);
+    if (!c) { if (m) m.textContent = 'Couldn’t load this course. Check your signal and try again.'; return; }
+    previewOpen(c);
+  },
+  customCourse: () => askCustomCourse(),
+  prevTee: v => { ui.prevTee = +v; render(); },
+  prevHoles: v => { ui.prevHoles = v; render(); },
+  coursePlay: () => {
+    const c = ui.preview;
+    if (!c) return;
+    update(s => { s.courses = s.courses || []; const keep = { ...c, lastTee: ui.prevTee }; const i = s.courses.findIndex(x => x.id === c.id); if (i >= 0) s.courses[i] = { ...s.courses[i], ...keep }; else s.courses.push(keep); });
+    ui.roundDraft = { courseId: c.id, tee: ui.prevTee, sel: c.holes.length === 18 ? ui.prevHoles : '18' };
+    go('play/conditions');
+  },
+  teeOff: () => { update(s => { s.conditions.set = true; }); startRound(); },
+  rStrokes: v => updHole(h => { h.strokes = h.strokes == null ? (h.par || 4) + (+v < 0 ? -1 : 0) : Math.max(1, h.strokes + +v); }),
+  rStrokesSet: v => updHole(h => { h.strokes = Math.max(1, +v); }),
+  rPutts: v => updHole(h => { h.putts = h.putts === +v ? null : +v; }),
+  rFw: v => updHole(h => { h.fw = h.fw === v ? null : v; }),
+  rPen: v => updHole(h => { h.pen = Math.max(0, (h.pen || 0) + +v); }),
+  setPar: v => {
+    update(s => { const a = s.active, h = a.holes[a.hole]; h.par = +v; if (h.par === 3) h.fw = null; const c = s.courses.find(x => x.id === a.course.id); if (c && c.holes[h.n - 1]) c.holes[h.n - 1].par = +v; });
+    render();
+  },
+  goHole: v => {
+    const a = curRound(), i = +v;
+    if (!a || i === a.hole) return;
+    if (a.holes[i].done) { if (ui.revisitFrom == null) { const firstOpen = a.holes.findIndex(x => !x.done); ui.revisitFrom = !a.holes[a.hole].done ? a.hole : firstOpen >= 0 ? firstOpen : null; } }
+    else ui.revisitFrom = null;
+    update(s => { s.active.hole = i; });
+    render();
+  },
+  finishHole: () => {
+    const a = curRound(), h = a && a.holes[a.hole];
+    if (!h) return;
+    if (h.strokes == null) return toast('Set the score first');
+    update(s => { s.active.holes[s.active.hole].done = true; });
+    if (ui.revisitFrom != null) { const to = ui.revisitFrom; ui.revisitFrom = null; update(s => { s.active.hole = to; }); toast(`Hole ${h.n} saved`); render(); return; }
+    if (a.hole === a.holes.length - 1) { render(); confirmRound('finish'); return; }
+    const r = curRound(), sm = roundSummary(r), thru = r.holes.filter(x => x.done && x.strokes != null).length;
+    let next = r.holes.findIndex((x, i) => i > r.hole && !x.done);
+    if (next < 0) next = r.holes.findIndex(x => !x.done);
+    if (next < 0) next = Math.min(r.hole + 1, r.holes.length - 1);
+    update(s => { s.active.hole = next; });
+    toast(`${scoreWord(h.strokes, h.par) || h.strokes + ' strokes'} on ${h.n} · ${toParText(sm.toPar)} thru ${thru}`);
+    render();
+  },
+  endRound: () => confirmRound('end'),
+  askCaddy: () => {
+    const a = curRound(), h = a && a.holes[a.hole];
+    if (!h) return;
+    update(s => { if (!h.caddy.length) { if (h.yds) s.caddy.target = Math.max(50, Math.min(250, Math.round(h.yds / 10) * 10)); s.caddy.surface = 'fairway'; s.caddy.slope = 'flat'; s.caddy.steep = false; } s.caddy.tab = 'sheet'; });
+    ui.fromHole = true;
+    go('caddy');
+  },
+  useClub: () => {
+    const st = S(), a = curRound();
+    if (!a) return;
+    const rec = recommend(st, reliability(st));
+    if (!rec.pick) return toast('No club fits this shot');
+    const cad = st.caddy, h = a.holes[a.hole];
+    update(s => { s.active.holes[s.active.hole].caddy.push({ t: Date.now(), yards: cad.target, playsLike: rec.playsLike, surface: cad.surface, slope: cad.slope, steep: !!cad.steep,
+      club: rec.pick.c.id, clubName: rec.pick.c.name, choke: !!rec.choke, aim: rec.aim, swing: rec.swing, cond: { temp: s.conditions.temp, moisture: s.conditions.moisture, elev: s.conditions.elev }, result: null }); });
+    toast(`${rec.pick.c.name} saved to hole ${h.n}`);
+    go('round');
+  },
+  callResult: v => callSheet(+v),
+  setCallResult: v => {
+    const [i, r] = v.split(':');
+    update(s => { const h = s.active.holes[s.active.hole]; if (r === 'x') h.caddy.splice(+i, 1); else h.caddy[+i].result = h.caddy[+i].result === r ? null : r; });
+    render();
+  },
   tab: v => { update(s => { s.caddy.tab = v; }); render(); },
   surface: v => { update(s => { s.caddy.surface = v; }); render(); },
   slope: v => { update(s => { s.caddy.slope = v; }); render(); },
@@ -1541,10 +1855,12 @@ document.addEventListener('click', e => {
 });
 
 document.addEventListener('keydown', e => {
+  if (e.target.id === 'findQ' && e.key === 'Enter') { e.preventDefault(); clearTimeout(findTimer); runFind(); return; }
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[role="button"][data-act]')) { e.preventDefault(); e.target.click(); }
 });
 
 document.addEventListener('input', e => {
+  if (e.target.id === 'findQ') { queueFind(); return; }
   const k = e.target.dataset.input;
   if (!k) return;
   const v = +e.target.value;
@@ -1566,6 +1882,7 @@ document.addEventListener('input', e => {
 
 document.addEventListener('change', e => {
   const t = e.target;
+  if (t.id === 'findState') { update(s => { s.lastState = t.value; }); runFind(); return; }
   if (t.dataset.act === 'draftClub') { update(s => { s.active.draft.club = t.value; }); return; }
   if (t.hasAttribute('data-warmauto')) { update(s => { s.warmAuto = t.checked; }); return; }
   if (t.dataset.input) { render(); return; }
