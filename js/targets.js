@@ -3,9 +3,9 @@
 
 const W = 358, H = 430;
 
-const IRONS = { cx: 179, cy: 190, r: 78, top: 160, bot: 220, vl: 155, vr: 203, rows: [104, 276, 360], cols: [119, 239] };
-const WOODS = { cx: 179, cy: 196, r: 70, top: 169, bot: 223, vl: 156, vr: 202, tee: [166, 266, 192, 334], cols: [26, 110, 248, 332], rows: [104, 330] };
-const GREEN = { cx: 179, cy: 334, r: 34, top: 322, bot: 346, vl: 168, vr: 190, cup: [179, 136], pxPerFt: 12, chunkY: 372 };
+const IRONS = { cx: 179, cy: 190, r: 88, top: 156, bot: 224, vl: 147, vr: 211, rows: [104, 276, 360], cols: [119, 239] };
+const WOODS = { cx: 179, cy: 214, r: 88, top: 180, bot: 248, vl: 147, vr: 211, cols: [26, 110, 248, 332], rows: [104, 330] };
+const GREEN = { cx: 179, cy: 322, r: 48, top: 306, bot: 338, vl: 162, vr: 196, cup: [179, 136], pxPerFt: 12, chunkY: 372 };
 const PUTT  = { cup: [179, 150], pxPerFt: 14, start: [179, 410] };
 
 export function viewFor(clubKind, shotType) {
@@ -46,10 +46,8 @@ export function hitTest(view, x, y, hand) {
   }
   if (view === 'woods') {
     const g = WOODS;
-    const [tx1, ty1, tx2, ty2] = g.tee;
-    if (x >= tx1 && x <= tx2 && y >= ty1 && y <= ty2) return { kind: 'tee' };
     const sec = ballSector(g, x, y, hand);
-    if (sec) return { kind: 'ball', sector: sec };
+    if (sec) return { kind: 'ball', sector: sec === 'under' ? 'skied' : sec }; // off the tee, under the ball = skied
     const c = g.cols;
     const col = x < c[0] ? 'obL' : x < c[1] ? 'left' : x < c[2] ? 'line' : x < c[3] ? 'right' : 'obR';
     const row = y < g.rows[0] ? 'long' : y < g.rows[1] ? 'pin' : 'short';
@@ -110,8 +108,9 @@ function dots(shots, pt) {
   return ghosts + (pt && pt.x != null ? `<circle cx="${pt.x}" cy="${pt.y}" r="12" class="t-mark"/>` : '');
 }
 
-function ballSvg(g, pending, hand, small) {
+function ballSvg(g, pending, hand, small, under = 'under') {
   const s = sideNames(hand);
+  if (pending === under && under !== 'under') pending = 'under';
   const hx = chordX(g, g.top), bx = chordX(g, g.bot);
   const fill = sec => {
     if (pending !== sec) return '';
@@ -124,13 +123,14 @@ function ballSvg(g, pending, hand, small) {
       ? `<path d="M${x1} ${g.top} L${x0} ${g.top} A${g.r} ${g.r} 0 0 0 ${x0} ${g.bot} L${x1} ${g.bot} Z" class="t-sel"/>`
       : `<path d="M${x0} ${g.top} L${x1} ${g.top} A${g.r} ${g.r} 0 0 1 ${x1} ${g.bot} L${x0} ${g.bot} Z" class="t-sel"/>`;
   };
-  const fs = small ? 11 : 15;
-  const lab = small ? '' : `<g class="t-ballab" font-size="${fs}" text-anchor="middle">
-      <text x="${g.cx}" y="${g.top - (g.top - (g.cy - g.r)) / 2 + 5}" font-weight="700">THIN</text>
-      <text x="${(g.cx - chordX(g, g.cy) + g.vl) / 2}" y="${g.cy + 5}">${s.L}</text>
-      <text x="${g.cx}" y="${g.cy + 5}" font-weight="700">pure</text>
-      <text x="${(g.cx + chordX(g, g.cy) + g.vr) / 2}" y="${g.cy + 5}">${s.R}</text>
-      <text x="${g.cx}" y="${g.bot + (g.cy + g.r - g.bot) / 2 + 5}">under</text></g>`;
+  // Every ball is labelled, the small green-view ball too: it is the only way to log contact there.
+  const fs = small ? 12.5 : 19, dy = fs * 0.36;
+  const lab = `<g class="t-ballab" font-size="${fs}" text-anchor="middle">
+      <text x="${g.cx}" y="${g.top - (g.top - (g.cy - g.r)) / 2 + dy}" font-weight="700">thin</text>
+      <text x="${(g.cx - chordX(g, g.cy) + g.vl) / 2}" y="${g.cy + dy}">${s.L}</text>
+      <text x="${g.cx}" y="${g.cy + dy}" font-weight="700">pure</text>
+      <text x="${(g.cx + chordX(g, g.cy) + g.vr) / 2}" y="${g.cy + dy}">${s.R}</text>
+      <text x="${g.cx}" y="${g.bot + (g.cy + g.r - g.bot) / 2 + dy - 1}">${under}</text></g>`;
   return `<circle cx="${g.cx}" cy="${g.cy}" r="${g.r + 2}" class="t-shadow"/>
     <circle cx="${g.cx}" cy="${g.cy}" r="${g.r}" class="t-ball"/>
     ${['thin', 'under', 'pure', s.L, s.R].map(fill).join('')}
@@ -166,7 +166,7 @@ export function drawIrons(shots, pending, hand, pt) {
 
 export function drawWoods(shots, pending, hand, tee, pt) {
   const g = WOODS;
-  return `${open('Driver and woods target: fairway in the middle, rough on both sides, out of bounds at the edges. Tap the tee for a skied shot.')}
+  return `${open('Driver and woods target: fairway in the middle, rough on both sides, out of bounds at the edges. Tap below the middle of the ball for a skied shot.')}
   <g clip-path="url(#tclip)">
     <rect width="${W}" height="${H}" class="t-rough"/>
     <rect x="110" width="138" height="${H}" class="t-fair"/>
@@ -174,17 +174,15 @@ export function drawWoods(shots, pending, hand, tee, pt) {
     <rect width="26" height="${H}" class="t-ob"/><rect x="332" width="26" height="${H}" class="t-ob"/>
     <g class="t-line"><line x1="0" y1="104" x2="${W}" y2="104"/><line x1="0" y1="330" x2="${W}" y2="330"/></g>
   </g>
-  ${tee ? '<path d="M168 266 L190 266 L184 318 L179 330 L174 318 Z" class="t-tee"/>' : ''}
   <g class="t-lab" text-anchor="middle">
-    <text x="13" y="24" font-size="11">OB</text><text x="345" y="24" font-size="11">OB</text>
+    <text x="13" y="26" font-size="13">OB</text><text x="345" y="26" font-size="13">OB</text>
     <text x="179" y="70">Long</text>
-    <text x="68" y="190">Left</text><text x="68" y="208">rough</text>
-    <text x="290" y="190">Right</text><text x="290" y="208">rough</text>
-    ${tee ? '<text x="222" y="304">Skied</text>' : ''}
+    <text x="68" y="146">Left</text><text x="68" y="164">rough</text>
+    <text x="290" y="146">Right</text><text x="290" y="164">rough</text>
     <text x="179" y="388">Short</text>
   </g>
   ${dots(shots, pt)}
-  ${ballSvg(g, pending, hand)}
+  ${ballSvg(g, pending, hand, false, 'skied')}
   </svg>`;
 }
 
@@ -193,15 +191,15 @@ export function drawGreen(shots, pending, hand, pt) {
   return `${open('Wedge target: a green with rings at 3 and 10 feet. Tap where the ball finished. The bottom row is the chunk zone.')}
   <g clip-path="url(#tclip)">
     <rect width="${W}" height="${H}" class="t-grass"/>
-    <rect x="16" y="12" width="326" height="290" rx="130" class="t-putt t-fringe"/>
+    <rect x="16" y="12" width="326" height="264" rx="124" class="t-putt t-fringe"/>
     <g class="t-ring"><circle cx="179" cy="136" r="36"/><circle cx="179" cy="136" r="120"/></g>
     <rect y="372" width="${W}" height="58" class="t-chunk"/>
     <line x1="0" y1="372" x2="${W}" y2="372" class="t-edge"/>
     <g class="t-line"><line x1="119" y1="372" x2="119" y2="${H}"/><line x1="239" y1="372" x2="239" y2="${H}"/></g>
   </g>
   <circle cx="179" cy="136" r="9" class="t-cup"/><rect x="177.8" y="48" width="2.5" height="88" class="t-pole-d"/><path d="M180.3 49 L210 58 L180.3 67 Z" class="t-flag"/>
-  <g class="t-labd" text-anchor="middle"><text x="179" y="36">Long</text><text x="44" y="141">Left</text><text x="314" y="141">Right</text><text x="179" y="290">Short</text>
-    <text x="146" y="182" font-size="13" font-weight="500">3 ft</text><text x="286" y="262" font-size="13" font-weight="500">10 ft</text></g>
+  <g class="t-labd" text-anchor="middle"><text x="179" y="36">Long</text><text x="44" y="141">Left</text><text x="314" y="141">Right</text><text x="96" y="252">Short</text>
+    <text x="147" y="183" font-size="14" font-weight="600">3 ft</text><text x="282" y="236" font-size="14" font-weight="600">10 ft</text></g>
   <g class="t-lab" text-anchor="middle"><text x="60" y="406">Chunk left</text><text x="179" y="406">Chunk</text><text x="298" y="406">Chunk right</text></g>
   ${dots(shots, pt)}
   ${ballSvg(g, pending, hand, true)}
@@ -226,7 +224,7 @@ export function drawPutt(putts, brk, pt) {
   <circle cx="179" cy="150" r="14" class="t-cup t-cuprim"/>
   <circle cx="179" cy="410" r="8" class="t-startball"/>
   <g class="t-labd" text-anchor="middle"><text x="179" y="30">Long</text><text x="36" y="155">Left</text><text x="322" y="155">Right</text><text x="240" y="300">Short</text>
-    <g font-size="13" font-weight="500"><text x="226" y="122">3 ft</text><text x="268" y="74">6 ft</text><text x="179" y="98">ideal pace</text></g></g>
+    <g font-size="14" font-weight="600"><text x="227" y="122">3 ft</text><text x="270" y="74">6 ft</text><text x="179" y="97">ideal pace</text></g></g>
   </svg>`;
 }
 
@@ -257,7 +255,7 @@ export function drawCarry(target, ghosts, pt) {
     const main = yd === target;
     const edge = Math.abs(yd - target) === 5;
     lines.push(main ? '' : `<line x1="44" y1="${y}" x2="358" y2="${y}" stroke="#FFFFFF" stroke-opacity="${edge ? 0.8 : 0.3}" stroke-width="1.5" ${edge ? 'stroke-dasharray="6 5"' : ''}/>`);
-    lines.push(`<text x="36" y="${y + 4}" text-anchor="end" font-size="${main ? 15 : 13}" font-weight="${main ? 700 : 500}" fill="${main ? '#E2B65A' : '#FFFFFF'}" font-family="'JetBrains Mono', monospace">${yd}</text>`);
+    lines.push(`<text x="36" y="${y + 4}" text-anchor="end" font-size="${main ? 15 : 13}" font-weight="${main ? 700 : 600}" fill="${main ? '#E2B65A' : '#FFFFFF'}">${yd}</text>`);
   }
   const ty = ydToY(target, target);
   const dots = ghosts.map(g => {
@@ -265,7 +263,7 @@ export function drawCarry(target, ghosts, pt) {
     return y < 4 || y > 336 ? '' : `<circle cx="${g.lx}" cy="${y}" r="5" class="t-ghost"/>`;
   }).join('');
   const mark = pt ? `<circle cx="${pt.lx}" cy="${ydToY(target, pt.carry)}" r="12" class="t-mark"/>` : '';
-  return `<svg class="target" viewBox="0 0 358 340" role="img" aria-label="Range from above with yardage lines around the ${target}-yard target. Tap where the ball landed." data-target>
+  return `<svg class="target" viewBox="0 0 358 340" style="--ar:1.053" role="img" aria-label="Range from above with yardage lines around the ${target}-yard target. Tap where the ball landed." data-target>
   <defs><clipPath id="cclip"><rect width="358" height="340" rx="16"/></clipPath></defs>
   <g clip-path="url(#cclip)"><rect width="358" height="340" class="t-grass"/>
   <rect x="0" y="${ydToY(target, target + 5)}" width="358" height="${10 * CARRY.pxPerYd}" class="t-band"/></g>
@@ -281,30 +279,55 @@ export function drawCarry(target, ghosts, pt) {
 
 // ---------- strike map: the clubface split into heel/center/toe by high/mid/low ----------
 // Coordinates are stored for a right-hander (hosel on the left); a left-hander's face is mirrored.
+export const FACE_ZONES = { heel: 160, toe: 246, high: 126, low: 200 };
 export function faceHit(x, y, hand) {
-  const xc = hand === 'left' ? 358 - x : x;
-  const h = xc < 164 ? 'heel' : xc > 248 ? 'toe' : 'center';
-  const v = y < 134 ? 'high' : y > 194 ? 'low' : 'mid';
+  const xc = hand === 'right' ? 358 - x : x;  // stored with the hosel on the left
+  const Z = FACE_ZONES;
+  const h = xc < Z.heel ? 'heel' : xc > Z.toe ? 'toe' : 'center';
+  const v = y < Z.high ? 'high' : y > Z.low ? 'low' : 'mid';
   return { x: Math.round(xc), y: Math.round(y), h, v };
 }
 
-export function drawFace(hand, ghosts, pt) {
-  const mx = x => hand === 'left' ? 358 - x : x;
-  const flip = hand === 'left' ? 'transform="translate(358 0) scale(-1 1)"' : '';
+// Drawn as the face looks when you hold the club up to read the mark: a right-hander's hosel is on the right.
+// shape: 'iron' (rounded toe, top line sloping down to a short heel, flat sole) or 'wood' / 'driver' (rounded face).
+export function drawFace(hand, ghosts, pt, shape = 'iron') {
+  const R = hand === 'right';
+  const mx = x => R ? 358 - x : x;
+  const flip = R ? 'transform="translate(358 0) scale(-1 1)"' : '';
   const dots = ghosts.map(g => `<circle cx="${mx(g.x)}" cy="${g.y}" r="7" class="t-facedot"/>`).join('');
   const mark = pt ? `<circle cx="${mx(pt.x)}" cy="${pt.y}" r="13" class="t-mark"/>` : '';
-  const [l, r] = hand === 'left' ? ['TOE', 'HEEL'] : ['HEEL', 'TOE'];
-  return `<svg class="target" viewBox="0 0 358 300" role="img" aria-label="Clubface split into heel, center and toe, high, middle and low. Tap where the mark is." data-target>
+  const Z = FACE_ZONES;
+  let body;
+  if (shape === 'iron') {
+    const grooves = [];
+    for (let y = 96; y <= 232; y += 14) {
+      const x1 = y < 138 ? 92 + (138 - y) / 0.4045 + 10 : 104;
+      const x2 = y > 218 ? 272 : 288;
+      grooves.push(`<line x1="${x1.toFixed(0)}" y1="${y}" x2="${x2}" y2="${y}"/>`);
+    }
+    body = `<path d="M92 243 C 64 236 50 196 40 150 L 12 52 Q 10 40 20 36 L 30 33 Q 38 31 41 40 L 70 122 C 78 134 92 139 104 140 Z" class="t-hosel"/>
+    <path d="M92 138 L 270 66 C 292 62 304 72 309 86 C 318 104 323 118 323 135 C 324 160 322 182 316 198 C 310 220 302 232 292 236 C 284 241 276 243 264 243 L 100 243 Q 92 243 92 235 Z" class="t-face"/>
+    <g class="t-groove">${grooves.join('')}</g>`;
+  } else {
+    const dark = shape === 'driver';
+    body = `<g transform="translate(9 0) scale(0.9 1)"><path d="M118 118 C 98 104, 82 66, 78 18 L 102 16 C 104 58, 118 90, 140 104 Z" class="t-hosel${dark ? ' dark' : ''}"/>
+    <path d="M96 128 Q 150 92 236 92 Q 318 94 334 154 Q 342 222 286 252 Q 206 276 124 254 Q 70 236 68 190 Q 68 148 96 128 Z" class="t-face${dark ? ' dark' : ''}"/>
+    <g class="t-groove${dark ? ' light' : ''}"><line x1="116" y1="148" x2="150" y2="148"/><line x1="108" y1="172" x2="150" y2="172"/><line x1="110" y1="196" x2="146" y2="196"/><line x1="122" y1="220" x2="144" y2="220"/>
+      <line x1="262" y1="132" x2="306" y2="132"/><line x1="264" y1="160" x2="314" y2="160"/><line x1="266" y1="188" x2="312" y2="188"/><line x1="268" y1="216" x2="300" y2="216"/>
+      <line x1="178" y1="244" x2="236" y2="244"/></g></g>`;
+  }
+  // Row labels sit just outside the toe, clear of the hosel.
+  const lx = R ? 4 : 354, anchor = R ? 'start' : 'end';
+  const colX = c => mx(c);
+  return `<svg class="target" viewBox="0 0 358 300" style="--ar:1.193" role="img" aria-label="${shape === 'iron' ? 'Iron' : shape === 'driver' ? 'Driver' : 'Wood'} face split into heel, center and toe, high, middle and low. Tap where the mark is." data-target>
   <rect width="358" height="300" rx="16" class="t-faceback"/>
   <g ${flip}>
-    <path d="M70 70 L52 26 L72 18 L96 72 Z" class="t-hosel"/>
-    <path d="M82 70 Q 80 252 100 262 L 306 262 Q 336 258 334 214 L 322 92 Q 316 64 290 62 L 96 66 Q 84 66 82 70 Z" class="t-face"/>
-    <g class="t-groove"><line x1="104" y1="104" x2="312" y2="102"/><line x1="104" y1="128" x2="314" y2="126"/><line x1="104" y1="152" x2="316" y2="150"/><line x1="104" y1="176" x2="318" y2="174"/><line x1="104" y1="200" x2="320" y2="198"/><line x1="106" y1="224" x2="322" y2="222"/></g>
-    <rect x="164" y="136" width="84" height="58" class="t-sweet"/>
-    <g class="t-zone"><line x1="164" y1="74" x2="164" y2="258"/><line x1="248" y1="70" x2="250" y2="258"/><line x1="90" y1="134" x2="326" y2="132"/><line x1="92" y1="194" x2="330" y2="192"/></g>
+    ${body}
+    <rect x="${Z.heel}" y="${Z.high}" width="${Z.toe - Z.heel}" height="${Z.low - Z.high}" class="t-sweet"/>
+    <g class="t-zone"><line x1="${Z.heel}" y1="58" x2="${Z.heel}" y2="262"/><line x1="${Z.toe}" y1="58" x2="${Z.toe}" y2="262"/><line x1="88" y1="${Z.high}" x2="324" y2="${Z.high}"/><line x1="88" y1="${Z.low}" x2="324" y2="${Z.low}"/></g>
   </g>
-  <g class="t-facelab" text-anchor="middle"><text x="126" y="288">${l}</text><text x="205" y="288">CENTER</text><text x="290" y="288">${r}</text></g>
-  <g class="t-facelab" font-size="11"><text x="10" y="108">HIGH</text><text x="10" y="168">MID</text><text x="10" y="228">LOW</text></g>
+  <g class="t-facelab" text-anchor="middle"><text x="${colX((92 + Z.heel) / 2)}" y="288">Heel</text><text x="${colX((Z.heel + Z.toe) / 2)}" y="288">Center</text><text x="${colX((Z.toe + 326) / 2)}" y="288">Toe</text></g>
+  <g class="t-facelab" text-anchor="${anchor}"><text x="${lx}" y="${Z.high - 10}">High</text><text x="${lx}" y="${(Z.high + Z.low) / 2 + 4}">Mid</text><text x="${lx}" y="${Z.low + 22}">Low</text></g>
   ${dots}${mark}
 </svg>`;
 }

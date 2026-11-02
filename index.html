@@ -18,8 +18,13 @@
 <link rel="stylesheet" href="./css/fonts.css">
 <link rel="stylesheet" href="./css/styles.css">
 <script>
-  // Apply the saved theme before first paint so night mode never flashes white.
-  try { var s = JSON.parse(localStorage.getItem('coachcaddy.v1') || '{}'); if (s.theme) document.documentElement.dataset.theme = s.theme; } catch (e) {}
+  // Apply the theme before first paint so night mode never flashes white. Automatic follows the phone.
+  try {
+    var s = JSON.parse(localStorage.getItem('coachcaddy.v1') || '{}'), t = s.theme;
+    if (!s.themeV && t !== 'night') t = 'system';
+    var dark = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches;
+    document.documentElement.dataset.theme = t === 'night' || (t !== 'day' && dark) ? 'night' : 'day';
+  } catch (e) {}
 </script>
 </head>
 <body>

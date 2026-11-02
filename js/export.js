@@ -3,7 +3,7 @@
 import { RANGE_DRILLS, PUTT_DRILLS, SHOT_TYPES, BASIC } from './data.js';
 import { reliability, gir, lieWords } from './engine.js';
 
-export const APP_VERSION = '0.6.0';
+export const APP_VERSION = '0.7.0';
 
 const COLS = [
   'record_type', 'session_id', 'session_kind', 'session_status', 'session_date', 'logged_at', 'drill',

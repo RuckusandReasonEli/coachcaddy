@@ -404,7 +404,7 @@ export function recommend(state, rel) {
   let reason = '';
   if (!pick) {
     pick = eligible[eligible.length - 1];
-    reason = `Nothing in the bag reaches ${playsLike}. Advance it and leave a full wedge.`;
+    reason = `${pick.c.name} carries ${pick.adj} today, leaving about ${Math.max(0, playsLike - pick.adj)}. Advance it and leave a full wedge.`;
   } else {
     const window = eligible.filter(x => x.adj >= playsLike - 2 && x.adj <= playsLike + 12 && x.r && !x.r.locked);
     if (window.length >= 2) {

@@ -6,7 +6,8 @@ const KEY = 'coachcaddy.v1';
 function fresh() {
   return {
     version: 1,
-    theme: 'day',
+    themeV: 1,
+    theme: 'system',      // 'system' follows the phone; 'day' or 'night' overrides it in Settings
     hand: 'right',
     bag: DEFAULT_BAG.map(c => ({ ...c })),
     sessions: [],          // finished range, putting and course sessions
@@ -28,6 +29,8 @@ function load() {
     if (!raw) return fresh();
     const s = JSON.parse(raw);
     if (Array.isArray(s.bag)) s.bag = migrateBag(s.bag);
+    // v0.7: appearance follows the phone unless night mode was picked on purpose (day was the old default).
+    if (!s.themeV) { if (s.theme !== 'night') s.theme = 'system'; s.themeV = 1; }
     return { ...fresh(), ...s, conditions: { ...fresh().conditions, ...(s.conditions || {}) }, caddy: { ...fresh().caddy, ...(s.caddy || {}) } };
   } catch (e) {
     return fresh();

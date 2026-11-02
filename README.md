@@ -4,29 +4,29 @@
 
 Coach Caddy is a golf practice and on-course companion. It runs as a home-screen web app: no app store, no accounts, no server. Everything you log stays on your phone.
 
-Version 0.6.
+Version 0.7.
 
 ## What's in it
 
-- **Pre-round warm-up.** Five illustrated mobility moves, 45 seconds each: Twist, Reverse Flys, Body Waves, Deep Squat Calf Raises and Standing Thoracic Rotations. Tap **Warm up first** on the home screen (or Warm-up in Practice) to open the cards. Each card shows a start and a movement picture, three cues, a coach tip and its own timer with pause and resume. Swipe or tap › to move between cards. Check **Auto-advance** and each finished move rolls into the next card, which starts itself after a 3-second get-ready; the setting is remembered. The screen stays awake while the timer runs where the phone allows it.
+- **Pre-round warm-up.** Five illustrated mobility moves, 45 seconds each: Twist, Reverse Flys, Body Waves, Deep Squat Calf Raises and Standing Thoracic Rotations. Tap **Warm up first** on the home screen (or Warm-up in Practice) to open the cards. Each card shows a start and a movement picture, three cues, a coach tip and its own timer with pause and resume. Swipe or tap the arrow to move between cards. Turn on **Auto-advance** and each finished move rolls into the next card, which starts itself after a 3-second get-ready; the setting is remembered. The screen stays awake while the timer runs where the phone allows it.
 - **Range practice.** Start a **Basic range session** (no drill, no ball count, any club) or pick from 18 drills. Each drill logs the outcome that matters for it:
-  - **Full-swing drills** use the ball-and-grass target. Tap the ball for contact and the grass for length and direction, or use the Contact, Length and Direction rows. Every part is optional; tap **Next shot** to save. The bottom row is the chunk zone, drag records curve, and carry yards are optional. The target adapts to the club and shot type: irons show a pin, woods show a fairway with a tee, and pitches and chips show a green with rings.
+  - **Full-swing drills** use the ball-and-grass target: one way to log, by touch. Tap the ball for contact and the grass for length and direction. Every part is optional; tap **Next shot** to save. The bottom row is the chunk zone, hold the ball for topped or shank, drag records curve, and carry yards are optional. The target adapts to the club and shot type: irons show a pin, woods show a fairway (the bottom of the ball reads skied), and pitches and chips show a green with a labelled ball. Each tracker keeps at most one small optional row under the picture (drill check, contact, start line, flight or lipped out). VoiceOver and Switch Control users get the same outcomes as buttons.
   - **Drill check.** Drills with a key move (line, gate, feet together, pause and others) add one optional Yes/No question, such as "Divot started after the line?". The recap scores it.
   - **Distance drills** (wedge ladder, clock wedges, choke-down gapping, one yardage with 3 clubs) show a top-down range around the target. Tap where the ball landed and fine-tune with − and +. Within 5 yards counts as on the number. Choke-down gapping offers to update My bag with the carries you measured.
   - **Shape drills** (9-shot drill and punch shot) show a 3 × 3 grid of heights and curves. The planned shot is outlined in gold; tap the box the ball actually flew.
-  - **Impact spray** shows the club face. Tap where the powder mark is; after a few balls it names your strike pattern.
+  - **Impact spray** shows the club face, drawn to match the club: an iron, a fairway wood or hybrid, or a dark driver face, mirrored for left-handers. Tap where the powder mark is; after a few balls it names your strike pattern.
   - **Play 9 on the range** plays a 9-hole card with par 3s, 4s and 5s (18 balls). The caddy picks a club for each shot, and the recap counts fairways and greens.
-- **Drill details.** Every range and putting drill has a **Details** button. It opens the card in place with the setup, numbered steps, purpose, feel, and **If done correctly**: what success looks like plus a target, such as 12 of 15 divots after the line. Tapping the card still selects the drill; Details only opens it. While logging, the ⓘ button next to the drill name opens the same details, with the YouTube link. Recaps say whether each drill's target was met.
+- **Drill details.** Every range and putting drill has an info button. It opens a sheet with the setup, numbered steps, purpose, feel, **If done correctly** (what success looks like plus a target, such as 12 of 15 divots after the line) and a YouTube link, with **Add to session** at the bottom. Tapping the card itself selects the drill. While logging, the info button next to the drill name opens the same sheet. Recaps show whether each drill's target was met.
 - **Changing clubs.** A one-row club rail sits above every logger: tap a club to switch, swipe for more. The drill's club has a gold dot and your most reliable clubs are starred. Touch and hold the rail, or tap the swing button, for the full bag and swing types. A basic session shows ball counts on each club and a "By club" breakdown in the recap.
-- **Putting practice.** 10 drills and a top-down hole logger. Tap the cup for a make or where the ball stopped, or pick distance (short or long) and direction. Lip outs are one tap. Tap **Next shot** to save. Breaking putts read as high side or low side.
+- **Putting practice.** 10 drills and a top-down hole logger. Tap the cup for a make or where the ball stopped, or pick distance (short or long) and direction. Lipped out is a switch. Tap **Next shot** to save. Breaking putts read as high side or low side.
 - **Play a round.** Tap **Caddy: Play** to start a round:
   - **Pick a course** from your saved courses, or search by state and name. Course data comes from [OpenGolfAPI](https://opengolfapi.org) (OpenStreetMap community data), the same source as Mulligan Skins. The preview shows pars, handicaps and yardages per hole; pick tees and All 18, Front 9 or Back 9. Courses not in the database can be added as a custom course (par 4 everywhere until changed on the hole screen). Once added, a course is stored on the phone, so the round works offline.
-  - **One screen per hole:** strokes (with Birdie, Par, Bogey, Double shortcuts), putts, tee shot, penalties, a strip of all holes to go back and fix one, and **Finish the hole**. The last hole reads **Finish the round**.
+  - **One screen per hole, in playing order:** Ask caddy, tee shot, penalties, putts, then the score (blank until you set it, with Birdie, Par, Bogey, Double shortcuts), a strip of all holes to go back and fix one, and **Finish the hole**. The last hole reads **Finish the round**.
   - **Ask caddy** opens the caddy with the hole's yardage filled in. **Use this club** saves the call (yardage, lie, club, aim) to the hole, and tapping the saved call records how it went.
   - **Round outline** at the end: score against par, front and back nines, a plain-language takeaway, the scorecard, fairways, greens, putts, penalties, and every caddy call grouped by lie. Save the suggested drills as your next practice plan. Past rounds are listed on the Caddy: Play screen.
-  - **Just the caddy** keeps the old way: conditions and caddy with no scorecard. Practice › Course now opens the same round flow.
+  - **Just the caddy** is the first row on the Play screen: conditions and caddy with no scorecard.
 - **Plain-language recaps.** Each recap names your miss pattern and its likely cause, shows a golf-science diagram, and suggests your next drills.
-- **Caddy.** Set temperature, moisture, elevation and difficulty once. Two swipeable tabs follow:
+- **Caddy.** Set temperature, ground, elevation and difficulty once. The yardage runs to 300. Two swipeable tabs follow:
   - **Cheat sheet:** carries adjusted for today's conditions.
   - **Lie:** surface and slope adjustments.
 
@@ -34,12 +34,13 @@ Version 0.6.
 - **Club reliability.** Each club gets a 0 to 100 score built from contact (50%), direction (30%) and distance (20%), with recent sessions weighted more. The score is measured against your own average, so 50 is a typical club for you.
   - A club unlocks after 3 practice sessions with it.
   - Your top three are starred, and the caddy prefers them when two clubs can reach.
-- **My bag.** Edit full and choked carries for every club, and the loft of each wedge (PW, gap, sand and flop). Tap × to take a club out of the bag; it stays listed, crossed out in red, and the caddy stops suggesting it. Tap ↺ to put it back. Add up to 5 custom clubs with a name, type, carry and optional loft.
-- **Your data.** A card at the bottom of Home shows how much is stored on the phone, with two buttons:
+- **My bag.** Tap a club to edit its full and choked carries, its loft, and whether it is in the bag. Tap **Edit** to take clubs out (they stay listed, crossed out, and the caddy stops suggesting them) or delete custom clubs. Add up to 5 custom clubs with a name, type, carry and optional loft.
+- **Settings** (the gear on Home): appearance, which hand you swing with, your data and about. **Your data** shows how much is stored on the phone:
   - **Export data (CSV)** saves everything at that moment, including a session in progress, as one CSV file. Each row is one record (range shot, putt, round hole, caddy call, club or setting, plus older course holes and shots), named in the first column, so it filters cleanly in Excel or Google Sheets. On iPhone the share sheet opens (Save to Files, Mail, AirDrop); elsewhere the file downloads.
   - **Reset** asks "If you reset, all your data will be deleted. Are you sure?" Yes deletes every session, the bag, the plan and all settings, and the app starts fresh. Cancel, tapping outside or Escape changes nothing, and **Export a copy first** saves the CSV without leaving the prompt.
-  - My bag has the same two buttons plus **Backup (JSON)**, an exact copy of everything for a future restore.
-- **Day and night themes.** Switch with the sun/moon button.
+  - **Backup (JSON)** saves an exact copy of everything for a future restore.
+- **Appearance.** Automatic follows the phone's light and dark setting; Day or Night overrides it in Settings.
+- **Built for iPhone conventions (v0.7).** A tab bar (Home, Practice, Play, My bag), standard back buttons that name the previous screen, Close and Finish on full-screen tasks, switches, sheets with Done, and a 44-point minimum for every control. Text uses the system font on Apple devices (Inter elsewhere) and follows the phone's text size, from a 12-point floor.
 - **One screen per view.** Every screen fits the phone it's on, from 320 px wide up. Main actions sit in a pinned bar at the bottom, long lists scroll above it, and the targets scale to the space left.
 - **Offline.** It works offline once loaded, fonts included.
 
@@ -59,15 +60,16 @@ When you change files, also bump `VERSION` in `sw.js` (for example `cc-v0.1.1`).
 
 ## Trying it with data
 
-Open **My bag** and tap **Try sample data** to load a few weeks of practice history. You can then see reliability scores, starred clubs and recaps right away. **Reset all** clears everything.
+Open **My bag** (or Settings) and tap **Try sample data** to load a few weeks of practice history. You can then see reliability scores, starred clubs and recaps right away. **Reset all data** in Settings clears everything.
 
 ## Files
 
 | File | What it does |
 | --- | --- |
 | `index.html` | App shell |
-| `css/fonts.css`, `fonts/` | Bundled Inter, Space Grotesk and JetBrains Mono (SIL Open Font License), so the app looks the same offline |
-| `css/styles.css` | Day and night themes, layout, target colors |
+| `css/fonts.css`, `fonts/` | Bundled Inter and Space Grotesk (SIL Open Font License), so the app looks the same offline |
+| `css/styles.css` | Day and night themes, layout, target colors, and the v0.7 type, spacing and touch system |
+| `tools/rem.py` | Run after editing `styles.css`: converts text sizes to rem so they follow the phone's text size |
 | `js/data.js` | Clubs, shot types, drills and the tracker each drill uses, lie rules, condition constants (tune here) |
 | `js/engine.js` | Recaps, reliability scoring, caddy recommendations |
 | `js/targets.js` | The ball-and-grass, fairway, green, carry, club-face and putting targets |

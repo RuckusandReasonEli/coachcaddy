@@ -233,3 +233,29 @@ export function clubShort(c) {
   const words = (c.name || c.id).split(/\s+/).filter(Boolean);
   return words.length > 1 ? words.map(w => w[0].toUpperCase()).join('').slice(0, 3) : words[0].slice(0, 3);
 }
+
+// ---------- icon set (v0.7) ----------
+// One family of line icons in the style of SF Symbols, so arrows, checks and stars never fall back to another font.
+const ICON_PATHS = {
+  back: '<path d="M15 4.5 L7.5 12 L15 19.5"/>',
+  chev: '<path d="M9 4.5 L16.5 12 L9 19.5"/>',
+  down: '<path d="M5 9 L12 16 L19 9"/>',
+  check: '<path d="M4.5 12.5 L9.5 17.5 L19.5 6.5"/>',
+  x: '<path d="M6 6 L18 18 M18 6 L6 18"/>',
+  plus: '<path d="M12 5 V19 M5 12 H19"/>',
+  minus: '<path d="M5 12 H19"/>',
+  info: '<circle cx="12" cy="12" r="9.5"/><path d="M12 11 V17"/><circle cx="12" cy="7.6" r="1.1" fill="currentColor" stroke="none"/>',
+  gear: '<circle cx="12" cy="12" r="3.2"/><path d="M12 2.8 V5.2 M12 18.8 V21.2 M2.8 12 H5.2 M18.8 12 H21.2 M5.5 5.5 L7.2 7.2 M16.8 16.8 L18.5 18.5 M5.5 18.5 L7.2 16.8 M16.8 7.2 L18.5 5.5"/><circle cx="12" cy="12" r="6.6"/>',
+  share: '<path d="M12 3.5 V15 M7.5 8 L12 3.5 L16.5 8"/><path d="M8 11 H6 V20.5 H18 V11 H16"/>',
+  star: '<path d="M12 3.6 L14.5 9 L20.3 9.5 L15.9 13.3 L17.2 19 L12 16 L6.8 19 L8.1 13.3 L3.7 9.5 L9.5 9 Z" fill="currentColor" stroke-linejoin="round"/>',
+  ring: '<circle cx="12" cy="12" r="8.5"/>',
+  trash: '<path d="M4.5 7 H19.5 M9.5 7 V4.5 H14.5 V7 M6.5 7 L7.5 20 H16.5 L17.5 7"/>',
+  home: '<path d="M4 11 L12 4 L20 11 V20 H14.5 V14 H9.5 V20 H4 Z" stroke-linejoin="round"/>',
+  practice: '<circle cx="12" cy="4.8" r="2.2" fill="currentColor" stroke="none"/><path d="M12 8.2 V15 M12 15 L8 21 M12 15 L16 21 M7 11.2 L17 9.2"/>',
+  play: '<path d="M7 21 V3 L18 7 L7 11" stroke-linejoin="round"/><ellipse cx="9" cy="21" rx="5" ry="1.3" fill="currentColor" stroke="none" opacity=".5"/>',
+  bag: '<rect x="6" y="8" width="12" height="13" rx="3"/><path d="M9 8 V3 M12 8 V2 M15 8 V4"/>',
+};
+export function ic(name, size = 20, label = '') {
+  const a = label ? `role="img" aria-label="${esc(label)}"` : 'aria-hidden="true"';
+  return `<svg class="ic ic-${name}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${a}>${ICON_PATHS[name] || ''}</svg>`;
+}
