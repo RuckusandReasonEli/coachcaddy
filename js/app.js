@@ -8,6 +8,7 @@ import { makeSample } from './sample.js';
 import { buildCSV, dataCounts, stamp, APP_VERSION } from './export.js';
 import { STATES, searchCourses, loadCourse, hitName, hitLine, customCourse, courseStats } from './courses.js';
 import { WARMUP, WARMUP_WORK as WORK, WARMUP_READY as READY } from './warmup.js';
+import { tallyFor, rateWords, drillResult, sessionDrills, skillTrend, skillScore, BASELINE, stageClub, SKILLS, baselineSkills, recommend as recommendDrills, baselineHeadline, retestPlan, metric, drillImpact, DRILL_SKILL } from './practice.js';
 
 const app = document.getElementById('app');
 const TAG = 'Your data, your practice, your results.';  // full line lives in index.html and the manifest
@@ -49,7 +50,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) appl
 // Four peer areas. Full-screen tasks (loggers, the warm-up timer, hole scoring, the caddy) hide it.
 function tabFor(r) {
   if (r.a === '' || r.a === 'settings') return 'home';
-  if (r.a === 'practice' || (r.a === 'warmup' && !r.b) || ((r.a === 'range' || r.a === 'putt') && r.b !== 'log')) return 'practice';
+  if (r.a === 'practice' || (r.a === 'warmup' && !r.b) || ((r.a === 'range' || r.a === 'putt') && r.b !== 'log' && r.b !== 'drill') || (r.a === 'baseline' && r.b)) return 'practice';
   if (r.a === 'play' || ((r.a === 'round' || r.a === 'course') && r.b === 'recap')) return 'play';
   if (r.a === 'bag') return 'bag';
   return null;
@@ -84,10 +85,11 @@ function render() {
   let html;
   switch (r.a) {
     case '': html = home(); break;
-    case 'practice': html = practice(); break;
+    case 'practice': html = r.b === 'helps' ? helpsView() : practice(); break;
+    case 'baseline': html = r.b === 'result' ? baselineResultView(r.c) : r.b === 'retest' ? retestResultView(r.c) : testLog(); break;
     case 'warmup': html = r.b ? warmMove(r.b) : warmList(); break;
-    case 'range': html = r.b === 'log' ? rangeLog() : r.b === 'recap' ? rangeRecapView(r.c) : rangePick(); break;
-    case 'putt': html = r.b === 'log' ? puttLog() : r.b === 'recap' ? puttRecapView(r.c) : puttPick(); break;
+    case 'range': html = r.b === 'log' ? rangeLog() : r.b === 'drill' ? drillResultView('range') : r.b === 'recap' ? rangeRecapView(r.c) : rangePick(); break;
+    case 'putt': html = r.b === 'log' ? puttLog() : r.b === 'drill' ? drillResultView('putt') : r.b === 'recap' ? puttRecapView(r.c) : puttPick(); break;
     case 'course': html = r.b === 'recap' ? courseRecapView(r.c) : (S().active && S().active.kind === 'course') ? courseLog() : (go('play'), ''); break;
     case 'play': html = r.b === 'course' ? coursePreview() : r.b === 'conditions' ? playSetup() : playStart(); break;
     case 'round': html = r.b === 'recap' ? roundRecapView(r.c) : roundHole(); break;
@@ -114,6 +116,7 @@ function render() {
 
 function after(r) {
   if (r.a === 'range' && r.b === 'log') { bindTarget('range'); bindRail(); }
+  if (r.a === 'baseline' && !r.b) bindTarget('range');
   if (r.a === 'putt' && r.b === 'log') bindTarget('putt');
   if (r.a === 'caddy') bindSwipe();
   if (r.a === 'round' && !r.b) bindHoleStrip();
@@ -148,7 +151,7 @@ const shotType = id => SHOT_TYPES.find(t => t.id === id) || SHOT_TYPES[0];
 function finishActive() {
   const a = S().active;
   if (!a) return null;
-  const has = (a.shots && a.shots.length) || (a.putts && a.putts.length) || (a.holes && a.holes.some(h => (h.shots && h.shots.length) || h.putts || h.strokes != null));
+  const has = a.kind !== 'baseline' && a.kind !== 'retest' && ((a.shots && a.shots.length) || (a.putts && a.putts.length) || (a.holes && a.holes.some(h => (h.shots && h.shots.length) || h.putts || h.strokes != null)));
   update(s => {
     if (has) s.sessions.push({ ...a, ended: Date.now(), pending: undefined });
     s.active = null;
@@ -177,7 +180,7 @@ function home() {
   const st = S();
   const rel = reliability(st);
   const since = Date.now() - 30 * 86400000;
-  const recent = st.sessions.filter(s => s.kind === 'range' && s.ended > since);
+  const recent = st.sessions.filter(s => ['range', 'baseline', 'retest'].includes(s.kind) && s.ended > since);
   const shots = recent.flatMap(s => s.shots);
   const withC = shots.filter(x => x.contact);
   const solid = withC.length ? Math.round(withC.filter(x => ['pure', 'solid'].includes(x.contact)).length / withC.length * 100) : null;
@@ -185,19 +188,19 @@ function home() {
   const last = st.sessions.slice().sort((a, b) => b.ended - a.ended)[0];
   let take = '';
   if (last) {
-    const rc = last.kind === 'range' ? rangeRecap(last, st.bag) : last.kind === 'putt' ? puttRecap(last) : last.kind === 'round' ? roundSummary(last) : courseRecap(last);
-    take = `<a class="card mini clamp2" href="#/${last.kind}/recap/${last.id}" style="text-decoration:none;color:inherit"><span class="lbl">Last takeaway · ${fmtDate(last.ended)}</span><span>${esc(rc.headline)}. ${esc(rc.lines[0] || rc.cause || '')}</span></a>`;
+    const tk = takeaway(last, st);
+    take = `<a class="card mini clamp2" href="#/${tk.href}" style="text-decoration:none;color:inherit"><span class="lbl">Last takeaway · ${fmtDate(last.ended)}</span><span>${esc(tk.text)}</span></a>`;
   }
   const c = st.conditions;
   let active = '';
   if (st.active) {
     const a = st.active, k = a.kind, rd = k === 'round' ? a : null;
-    const title = rd ? rd.course.name : k === 'range' ? (a.basic ? 'Basic range session' : 'Range session') : k === 'putt' ? 'Putting session' : 'Round';
+    const title = rd ? rd.course.name : k === 'range' ? (a.basic ? 'Basic range session' : 'Range session') : k === 'putt' ? 'Putting session' : k === 'baseline' ? 'Baseline' : k === 'retest' ? 'Re-test' : 'Round';
     let sub = '';
     if (rd) { const thru = rd.holes.filter(x => x.done && x.strokes != null).length; sub = `Hole ${rd.holes[rd.hole].n}${thru ? ` · ${toParShort(roundSummary(rd).toPar)} through ${thru}` : ''}`; }
-    else if (k === 'range') sub = `${a.shots.length} ball${a.shots.length === 1 ? '' : 's'} logged`;
+    else if (k === 'range' || k === 'baseline' || k === 'retest') sub = `${a.shots.length} ball${a.shots.length === 1 ? '' : 's'} logged`;
     else if (k === 'putt') sub = `${a.putts.length} putt${a.putts.length === 1 ? '' : 's'} logged`;
-    active = `<a class="card hero resume" href="#/${k === 'round' ? 'round' : k + '/log'}"><span class="grow"><span class="lbl">In progress</span><span class="h2">${esc(title)}</span>${sub ? `<span class="muted">${esc(sub)}</span>` : ''}</span><span class="resume-go">Resume${ic('chev', 18)}</span></a>`;
+    active = `<a class="card hero resume" href="#/${k === 'round' ? 'round' : k === 'baseline' || k === 'retest' ? 'baseline' : k + '/log'}"><span class="grow"><span class="lbl">In progress</span><span class="h2">${esc(title)}</span>${sub ? `<span class="muted">${esc(sub)}</span>` : ''}</span><span class="resume-go">Resume${ic('chev', 18)}</span></a>`;
   }
   return `
   <header class="masthead">
@@ -236,6 +239,9 @@ function settings() {
   <h1>Settings</h1>
   <div class="scroll-y" data-keep="settings">
   <section class="group"><h2 class="group-h">Appearance</h2>${seg('setTheme', st.theme, [['system', 'Automatic'], ['day', 'Day'], ['night', 'Night']])}<p class="footnote">Automatic follows your phone’s light and dark setting.</p></section>
+  <section class="group"><h2 class="group-h">Practice</h2>
+    <button class="switch-row" role="switch" aria-checked="${st.warmBell !== false}" data-act="warmBell"><span class="grow"><b>Bell between warm-up moves</b><span class="muted">A soft chime when each move ends</span></span><i class="switch" aria-hidden="true"></i></button>
+    <button class="switch-row" role="switch" aria-checked="${!!st.detailTrack}" data-act="detailTrack"><span class="grow"><b>Detailed drill tracking</b><span class="muted">Use the pictures inside drills instead of two buttons</span></span><i class="switch" aria-hidden="true"></i></button></section>
   <section class="group"><h2 class="group-h">You swing</h2>${seg('hand', st.hand, [['right', 'Right-handed'], ['left', 'Left-handed']])}<p class="footnote">Sets heel and toe, draw and fade, and which way the club face points.</p></section>
   <section class="group"><h2 class="group-h">Your data</h2><p class="footnote">Stored only on this phone. ${parts.length ? esc(parts.join(' · ')) + '.' : 'Nothing logged yet.'}</p>
     <div class="list">
@@ -532,20 +538,42 @@ function roundRecapView(id) {
 }
 
 // ---------- practice ----------
+// Today's session: warm-up, baseline, drills, re-test. Each step can be skipped.
+const dayKey = () => new Date().toLocaleDateString('en-CA');
+function todayState() { const t = S().today; return t && t.day === dayKey() ? t : { day: dayKey() }; }
+function setToday(fn) { update(s => { if (!s.today || s.today.day !== dayKey()) s.today = { day: dayKey() }; fn(s.today); }); }
+function flowSteps() {
+  const t = todayState(), st = S();
+  const drillsDone = t.drillsId && st.sessions.some(x => x.id === t.drillsId);
+  const steps = [
+    { id: 'warm', name: 'Warm-up', sub: `${WARMUP.length} moves, a bell between each`, tag: '4 min', done: t.warm, skip: t.warmSkip },
+    { id: 'baseline', name: 'Baseline', sub: '10 free, then 5 each: wedge, 7-iron, driver', tag: '25 balls', done: !!t.baselineId, skip: t.baseSkip },
+    { id: 'drills', name: 'Drills', sub: t.baselineId ? 'Picked from today’s baseline' : 'Picked from your baseline', tag: '40 balls', done: drillsDone, skip: false },
+    { id: 'retest', name: 'Re-test', sub: '5 balls: did the drill help?', tag: 'Optional', done: !!t.retestId, skip: t.retestSkip || (drillsDone && !t.baselineId) },
+  ];
+  const now = steps.find(x => !x.done && !x.skip);
+  return { steps, now, t };
+}
 function practice() {
-  const plan = S().plan;
+  const { steps, now, t } = flowSteps();
+  const label = { warm: 'Start with the warm-up', baseline: 'Start the baseline', drills: t.baselineId ? 'Start today’s drills' : 'Pick today’s drills', retest: 'Re-test · 5 balls' };
+  const skip = { warm: 'Skip to the baseline', baseline: 'Skip the baseline', retest: 'Skip the re-test' };
   return `
-  <div class="top">${back('', 'Home')}${themeBtn()}</div>
-  <div class="title-row">${golferGlyph(46, 'g-brand')}<h1>Coach: Practice</h1></div>
-  <div class="scroll-y" data-shell data-keep="practice">
-  ${scienceCard('flight')}
-  <a class="row-link" href="#/warmup">${drillGlyph('stretch')}<span class="grow"><span class="name">Warm-up</span><span class="muted">5 moves, about 4 minutes</span></span>${chev()}</a>
-  <a class="row-link" href="#/range">${drillGlyph('traj')}<span class="grow"><span class="name">Range</span><span class="muted">Drills, tap ball and grass</span></span>${chev()}</a>
-  <a class="row-link" href="#/putt">${drillGlyph('pworld')}<span class="grow"><span class="name">Putting</span><span class="muted">Line, speed, pressure</span></span>${chev()}</a>
+  <div class="top">${back('', 'Home')}</div>
+  <h1>Coach: Practice</h1>
+  <div class="scroll-y" data-keep="practice">
+  <div class="card flow-card">
+    <div class="flow-head"><span class="lbl">Today’s session · about 45 minutes</span><span class="h2">${now ? 'Warm up, test, then train' : 'Session done. Nice work.'}</span></div>
+    <div class="flow">${steps.map((x, i) => `<button class="flow-step${x.done ? ' done' : x === now ? ' now' : x.skip ? ' skipped' : ''}" data-act="flowStep" data-v="${x.id}"><span class="flow-n">${x.done ? ic('check', 18) : i + 1}</span><span><b>${x.name}</b><span class="muted">${esc(x.sub)}</span></span><span class="flow-tag${x === now ? ' gold' : ''}">${x.done ? 'Done' : x === now ? 'Start here' : x.skip ? 'Skipped' : x.tag}</span></button>`).join('')}</div>
   </div>
-  ${plan ? `<div class="bar"><div class="card hero"><span class="lbl">Your plan${plan.from ? ' · ' + esc(plan.from) : ''}</span>
-    <span>${plan.range && plan.range.length ? 'Range: ' + plan.range.map(id => esc(drillById(id).name)).join(', ') : ''}${plan.putt && plan.putt.length ? `<br>Putting: ${plan.putt.map(id => esc(drillById(id).name)).join(', ')}` : ''}</span>
-    <div class="btn-row">${plan.range && plan.range.length ? '<a class="btn goldbtn" href="#/range">Range plan</a>' : ''}${plan.putt && plan.putt.length ? '<a class="btn sec on-hero" href="#/putt">Putting plan</a>' : ''}</div></div></div>` : ''}`;
+  <span class="lbl">Or practise your own way</span>
+  <button class="row-link" data-act="startBasic">${drillGlyph('traj')}<span class="grow"><span class="name">Just hit balls</span><span class="muted">No count, any club</span></span>${chev()}</button>
+  <a class="row-link" href="#/range">${drillGlyph('line')}<span class="grow"><span class="name">Pick drills yourself</span><span class="muted">All ${RANGE_DRILLS.length} range drills</span></span>${chev()}</a>
+  <a class="row-link" href="#/putt">${drillGlyph('pworld')}<span class="grow"><span class="name">Putting</span><span class="muted">Line, speed, pressure</span></span>${chev()}</a>
+  <a class="row-link" href="#/practice/helps">${drillGlyph('ladder')}<span class="grow"><span class="name">What helps you</span><span class="muted">Drills ranked by what they changed</span></span>${chev()}</a>
+  </div>
+  <div class="bar">${now ? `<button class="btn pri" data-act="flowStep" data-v="${now.id}">${label[now.id]}</button>${skip[now.id] ? `<button class="btn plain" data-act="flowSkip" data-v="${now.id}">${skip[now.id]}</button>` : ''}`
+    : `<button class="btn sec" data-act="flowStep" data-v="drills">See today’s recap</button>`}</div>`;
 }
 
 // ---------- warm-up ----------
@@ -581,6 +609,8 @@ function tickWarm() {
 function doneWarm() {
   stopWarm();
   const next = WARMUP[warmIdx(route().b) + 1];
+  bell(next ? 1 : 2);
+  if (!next) setToday(t => { t.warm = true; });
   if (S().warmAuto && next) { ui.wuChain = true; go('warmup/' + next.id); return; }
   if (!next) toast('Warm-up done. Go hit some balls.');
   wu.phase = 'done'; wu.left = 0; paintWarm();
@@ -630,10 +660,11 @@ function warmMove(id) {
   </div>
   </div>
   <div class="bar">
+  <button class="switch-row" role="switch" aria-checked="${S().warmBell !== false}" data-act="warmBell"><span class="grow"><b>Bell between moves</b><span class="muted">Rings when a move ends and the next begins</span></span><i class="switch" aria-hidden="true"></i></button>
   <button class="switch-row" role="switch" aria-checked="${!!S().warmAuto}" data-act="warmAuto"><span class="grow"><b>Auto-advance</b><span class="muted">${next ? `When the timer ends, start ${esc(sentence(next.name))}` : 'Last move of the warm-up'}</span></span><i class="switch" aria-hidden="true"></i></button>
   <div class="btn-row"><button class="btn pri" id="wuGo" data-act="warmGo">Start ${fmtS(WORK)}</button>${next
     ? `<a class="btn sec wu-next" href="#/warmup/${next.id}" aria-label="Next move: ${esc(next.name)}">${ic('chev', 24)}</a>`
-    : `<a class="btn sec wu-next" href="#/" aria-label="Finish warm-up and go home">${ic('check', 24)}</a>`}</div>
+    : `<button class="btn sec wu-next" data-act="warmDone" aria-label="Finish the warm-up">${ic('check', 24)}</button>`}</div>
   </div>`;
 }
 
@@ -738,15 +769,16 @@ function detailSheet(d, sub, pick) {
 }
 
 // ---------- range: logger ----------
-function currentDrill(a) { return drillById(a.drills[a.di]) || RANGE_DRILLS[0]; }
+function currentDrill(a) { return drillById((a.drills || [])[a.di]) || RANGE_DRILLS[0]; }
 function drillShots(a) { const d = currentDrill(a); return a.shots.filter(s => s.drill === d.id); }
 const shotsFor = (a, d) => a.shots.filter(s => s.drill === d.id);
-const trackerOf = a => currentDrill(a).tracker || 'full';
+const trackerOf = a => a.kind === 'baseline' || a.kind === 'retest' ? 'full' : currentDrill(a).tracker || 'full';
 const capWord = w => w ? w[0].toUpperCase() + w.slice(1) : w;
 const avgCarry = xs => Math.round(xs.reduce((t, s) => t + s.carry, 0) / xs.length);
 
 // Which target the logger draws. Play 9 approaches always aim at a green.
 function logView(a) {
+  if (a.kind === 'baseline' || a.kind === 'retest') return viewFor(club(a.club).kind, a.type);
   if (trackerOf(a) === 'play9') { const n = p9Now(a); return n && n.phase === 'approach' ? 'irons' : 'woods'; }
   return viewFor(club(a.club).kind, a.type);
 }
@@ -754,7 +786,8 @@ function logView(a) {
 function targetSvg(a) {
   const cl = club(a.club);
   const view = logView(a);
-  const shots = drillShots(a).filter(s => s.view === view);
+  const test = a.kind === 'baseline' || a.kind === 'retest';
+  const shots = (test ? a.shots.filter(s => s.stage === a.stages[a.si].id) : drillShots(a)).filter(s => s.view === view);
   const pd = a.pending || {};
   const pt = pd.x != null ? pd : null;
   if (view === 'woods') return drawWoods(shots, pd.contact, S().hand, a.type === 'tee' || cl.id === 'D', pt);
@@ -1017,8 +1050,8 @@ function p9Pips(a) {
   return `<div class="p9-pips" role="img" aria-label="Fairways and greens by hole">${PLAY9_HOLES.map((H, h) => {
     const mine = shots.filter(s => s.hole === h + 1);
     const tee = mine.find(s => s.phase === 'tee'), app_ = mine.find(s => s.phase === 'approach');
-    const fw = H.par === 3 ? 'na' : !tee ? '' : tee.finish && tee.finish.col === 'line' ? 'hit' : 'miss';
-    const gr = !app_ ? '' : app_.finish && app_.finish.row === 'pin' && app_.finish.col === 'line' ? 'hit' : 'miss';
+    const fw = H.par === 3 ? 'na' : !tee ? '' : (tee.tally ? tee.hit : tee.finish && tee.finish.col === 'line') ? 'hit' : 'miss';
+    const gr = !app_ ? '' : (app_.tally ? app_.hit : app_.finish && app_.finish.row === 'pin' && app_.finish.col === 'line') ? 'hit' : 'miss';
     return `<span><b>${h + 1}</b><i class="${fw}"></i><i class="${gr} g"></i></span>`;
   }).join('')}</div>`;
 }
@@ -1050,6 +1083,7 @@ function rangeLog() {
   const basic = d.id === 'basic';
   const more = a.di < a.drills.length - 1;
   const counts = basic ? a.shots.reduce((m, s) => { m[s.club] = (m[s.club] || 0) + 1; return m; }, {}) : null;
+  if (!basic && !S().detailTrack) return tallyLog(a, d, 'range');
   let progress = `${done}/${d.balls} balls`, body = '', nextLabel = 'Next shot ›', carryBtn = false, topNext = null;
   if (basic) {
     progress = `${a.shots.length} ball${a.shots.length === 1 ? '' : 's'} · ${Object.keys(counts).length} club${Object.keys(counts).length === 1 ? '' : 's'}`;
@@ -1111,6 +1145,7 @@ function zoneButtons(view) {
 }
 function p9Score(a) {
   const shots = a.shots.filter(s => s.drill === 'play9');
+  if (shots.some(s => s.tally)) { const t = ph => shots.filter(s => s.phase === ph); const h = xs => xs.filter(s => s.hit).length; return `Fairways ${h(t('tee'))} of ${t('tee').length} · greens ${h(t('approach'))} of ${t('approach').length}`; }
   const fw = shots.filter(s => s.phase === 'tee' && s.finish && s.finish.col);
   const gr = shots.filter(s => s.phase === 'approach' && s.finish);
   return `Fairways ${fw.filter(s => s.finish.col === 'line').length} of ${fw.length} · greens ${gr.filter(s => s.finish.row === 'pin' && s.finish.col === 'line').length} of ${gr.length}`;
@@ -1141,6 +1176,7 @@ function rangeRecapView(id) {
   const st = S();
   const sess = st.sessions.find(s => s.id === id);
   if (!sess) return `<div class="top">${back('', 'Home')}</div><h1>Session not found</h1>`;
+  if ((sess.shots || []).some(x => x.tally)) return tallyRecapView(sess);
   const rc = rangeRecap(sess, st.bag);
   const rel = reliability(st).clubs[rc.mainClub];
   const n = sess.shots.length;
@@ -1221,6 +1257,7 @@ function puttLog() {
   const a = S().active;
   if (!a || a.kind !== 'putt') { go('putt'); return ''; }
   const d = drillById(a.drills[a.di]);
+  if (!S().detailTrack) return tallyLog(a, d, 'putt');
   const mine = a.putts.filter(p => p.drill === d.id);
   const made = mine.filter(p => p.made).length;
   const last = a.putts[a.putts.length - 1];
@@ -1259,6 +1296,7 @@ function puttSetupSheet() {
 function puttRecapView(id) {
   const sess = S().sessions.find(s => s.id === id);
   if (!sess) return `<div class="top">${back('', 'Home')}</div><h1>Session not found</h1>`;
+  if ((sess.putts || []).some(x => x.tally)) return tallyRecapView(sess);
   const rc = puttRecap(sess);
   return `
   <div class="top">${back('', 'Home')}</div>
@@ -1698,8 +1736,9 @@ function bindSwipe() {
 
 // ---------- actions ----------
 const actions = {
-  warmRoutine: () => { ui.wuChain = true; go('warmup/' + WARMUP[0].id); },
+  warmRoutine: () => { unlockAudio(); ui.wuChain = true; go('warmup/' + WARMUP[0].id); },
   warmGo: () => {
+    unlockAudio();
     if (wu.phase === 'work') {
       wu.ms = Math.max(0, wu.end - Date.now()); wu.left = Math.ceil(wu.ms / 1000);
       stopWarm(); wu.phase = 'paused'; paintWarm(); return;
@@ -2004,6 +2043,509 @@ const actions = {
   reset: () => resetPrompt(),
   exportCsv: () => { exportCSV(); },
 };
+
+// ================= v0.8: baseline, two-button drills, scores, re-test, what helps =================
+
+// ---------- the bell ----------
+// A soft two-partial chime made in the browser, so there is no sound file to load. The phone only
+// lets a page play sound after a tap, so the warm-up buttons unlock it first.
+let actx = null;
+function unlockAudio() {
+  try {
+    if (!actx) { const C = window.AudioContext || window.webkitAudioContext; if (C) actx = new C(); }
+    if (actx && actx.state === 'suspended') actx.resume();
+  } catch (e) {}
+}
+function bell(times = 1) {
+  if (S().warmBell === false || !actx) return;
+  try {
+    for (let k = 0; k < times; k++) {
+      const t0 = actx.currentTime + 0.02 + k * 0.5;
+      [[880, 0.32], [1760, 0.12], [2640, 0.05]].forEach(([f, g]) => {
+        const o = actx.createOscillator(), v = actx.createGain();
+        o.type = 'sine'; o.frequency.value = f;
+        v.gain.setValueAtTime(0.0001, t0);
+        v.gain.exponentialRampToValueAtTime(g, t0 + 0.012);
+        v.gain.exponentialRampToValueAtTime(0.0001, t0 + 1.8);
+        o.connect(v); v.connect(actx.destination); o.start(t0); o.stop(t0 + 1.9);
+      });
+    }
+  } catch (e) {}
+}
+
+// ---------- small pieces ----------
+const sgn = v => v == null ? '–' : v > 0 ? `+${v}` : v < 0 ? `−${-v}` : '0';
+const pct = v => v == null ? '–' : `${v}%`;
+const clubWords = c => c.id === 'PW' ? 'Pitching wedge' : c.name;
+// The baseline headline follows the first drill it picked, so the two never disagree.
+function baseHead(sess, recs) {
+  const sk = baselineSkills(sess), lead = (recs || sess.recs || []).find(r => r.id !== 'play9');
+  if (!lead || lead.skill === 'transfer') return baselineHeadline(sk);
+  const name = SKILLS[lead.skill], v = (sk.find(x => x.id === lead.skill) || {}).v;
+  return v != null && v === Math.min(...sk.filter(x => x.v != null).map(x => x.v)) ? `${name} is the leak today` : `${name} first today`;
+}
+const isTest = a => a && (a.kind === 'baseline' || a.kind === 'retest');
+const entriesOf = sess => (sess.kind === 'putt' ? sess.putts : sess.shots) || [];
+const bandColor = b => b === 'Solid' ? 'var(--brand)' : b === 'Building' ? 'var(--gold)' : 'var(--red)';
+function ring(v, band, size = 76) {
+  const r = size / 2 - 8, c = 2 * Math.PI * r, m = size / 2;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" aria-hidden="true"><circle cx="${m}" cy="${m}" r="${r}" fill="none" stroke="var(--sf2)" stroke-width="8"/><circle cx="${m}" cy="${m}" r="${r}" fill="none" stroke="${bandColor(band)}" stroke-width="8" stroke-linecap="round" stroke-dasharray="${(c * v / 100).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 ${m} ${m})"/><text x="${m}" y="${m + 7}" text-anchor="middle" font-size="${size > 60 ? 22 : 15}" font-weight="700" fill="var(--ink)" font-family="Space Grotesk, sans-serif">${v}</text></svg>`;
+}
+function spark(vals) {
+  const xs = vals.slice(-6);
+  if (xs.length < 2) return '';
+  const pts = xs.map((v, i) => [Math.round(i * 320 / (xs.length - 1)), Math.round(52 - v / 100 * 48)]);
+  return `<svg class="spark" viewBox="-6 0 332 56" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts.map(p => p.join(',')).join(' ')}" fill="none" stroke="var(--brand)" stroke-width="3" vector-effect="non-scaling-stroke"/></svg>`;
+}
+// A drill's skill: the baseline skill it moves when there is one, otherwise what the drill trains.
+const skillKey = d => DRILL_SKILL[d.id] || d.trains;
+const skillName = d => DRILL_SKILL[d.id] ? SKILLS[DRILL_SKILL[d.id]] : d.trains;
+function skillPoints(d, extra) {
+  const key = skillKey(d), out = [];
+  S().sessions.filter(s => (s.kind === 'range' || s.kind === 'putt') && (!extra || s.id !== extra.id)).concat(extra ? [extra] : []).forEach(s => {
+    const rs = sessionDrills(s).filter(r => skillKey(r.drill) === key);
+    if (rs.length) out.push({ t: s.ended || Date.now(), score: Math.round(rs.reduce((n, r) => n + r.score, 0) / rs.length) });
+  });
+  return out.sort((a, b) => a.t - b.t);
+}
+
+// What Home shows about the last session, for every kind of session.
+function takeaway(sess, st) {
+  const k = sess.kind;
+  if (k === 'baseline') {
+    const recs = (sess.recs || []).filter(r => r.id !== 'play9').map(r => drillById(r.id).name);
+    return { href: `baseline/result/${sess.id}`, text: `${baseHead(sess)}.${recs.length ? ` Drills: ${recs.join(' and ')}.` : ''}` };
+  }
+  if (k === 'retest') return { href: `baseline/retest/${sess.id}`, text: `Re-test: ${SKILLS[sess.skill]} ${pct(sess.before)} to ${pct(sess.value)}.` };
+  if (entriesOf(sess).some(x => x.tally)) {
+    const ds = sessionDrills(sess).sort((a, b) => b.score - a.score);
+    if (ds.length) return { href: `${k}/recap/${sess.id}`, text: `${ds.length} drill${ds.length > 1 ? 's' : ''}. Best: ${ds[0].drill.name} ${ds[0].score}, ${ds[0].band.toLowerCase()}.` };
+  }
+  const rc = k === 'range' ? rangeRecap(sess, st.bag) : k === 'putt' ? puttRecap(sess) : k === 'round' ? roundSummary(sess) : courseRecap(sess);
+  return { href: `${k}/recap/${sess.id}`, text: `${rc.headline}. ${rc.lines[0] || rc.cause || ''}` };
+}
+
+// ---------- baseline and re-test logger ----------
+function setStage(A, bag) {
+  const st = A.stages[A.si];
+  if (!st || !st.club) return;
+  A.club = stageClub(st, bag);
+  const k = (bag.find(c => c.id === A.club) || {}).kind;
+  A.type = st.type === 'tee' && !['wood', 'hybrid'].includes(k) ? 'full' : st.type;
+}
+function startTest(kind, extra = {}) {
+  if (S().active) finishActive();
+  const stages = kind === 'baseline' ? BASELINE.map(x => ({ ...x })) : [{ ...extra.stage, n: 5 }];
+  update(s => {
+    const A = s.active = { kind, id: uid(), started: Date.now(), stages, si: 0, free: 0, shots: [], pending: {}, club: stageClub({ club: '7i', kind: 'iron' }, s.bag), type: 'full' };
+    if (kind === 'retest') Object.assign(A, { skill: extra.skill, before: extra.before, baselineId: extra.baselineId, drillIds: extra.drillIds });
+    setStage(A, s.bag);
+  });
+  go('baseline');
+}
+function finishTest() {
+  const a = S().active;
+  if (!isTest(a)) return;
+  if (!a.shots.length) { update(s => { s.active = null; }); toast('Nothing tracked, so nothing saved'); go('practice'); return; }
+  const sess = { ...a, ended: Date.now(), pending: undefined };
+  if (a.kind === 'baseline') {
+    sess.recs = recommendDrills(S(), sess);
+    update(s => { s.sessions.push(sess); s.active = null; });
+    setToday(t => { t.baselineId = sess.id; });
+    go('baseline/result/' + sess.id);
+  } else {
+    sess.value = metric(a.skill, a.shots);
+    update(s => { s.sessions.push(sess); s.active = null; });
+    setToday(t => { t.retestId = sess.id; });
+    go('baseline/retest/' + sess.id);
+  }
+}
+function testLog() {
+  const a = S().active;
+  if (!isTest(a)) { go('practice'); return ''; }
+  const base = a.kind === 'baseline', stg = a.stages[a.si];
+  const cnt = x => x.id === 'free' ? a.free : a.shots.filter(s => s.stage === x.id).length;
+  const done = cnt(stg), last = a.si === a.stages.length - 1;
+  const pills = base ? `<div class="stage-pills" role="list" aria-label="Baseline stages">${a.stages.map((x, i) => `<span role="listitem" class="${i < a.si ? 'done' : i === a.si ? 'on' : ''}"><b>${esc(x.name)}</b>${i < a.si ? `${x.id === 'free' ? '' : cnt(x) + ' · '}done` : i === a.si ? `${cnt(x)} of ${x.n}` : `${x.n} balls`}</span>`).join('')}</div>` : '';
+  const cl = club(a.club);
+  const swing = a.type === 'tee' ? 'tee' : 'full';
+  const top = `<div class="logtop"><button class="back close" data-act="testClose" aria-label="Stop the ${base ? 'baseline' : 're-test'}">Close</button>
+    <div class="lt-mid"><span class="lt-line"><span class="lt-name">${base ? 'Baseline' : 'Re-test'}</span></span><span class="lt-sub">${stg.id === 'free' ? 'Free swings · not tracked' : `${esc(clubWords(cl))} · ${swing}`}</span></div>
+    <button class="back lt-next" data-act="testSkip">${last ? 'Finish' : stg.id === 'free' ? 'Skip' : 'Skip club'}</button></div>`;
+  if (stg.id === 'free') {
+    const nextClub = club(stageClub(a.stages[a.si + 1], S().bag));
+    return `${top}${pills}
+    <div class="scroll-y log-body" data-keep="free">
+    <div class="card free-card"><span class="lbl">Get loose. Any club, nothing is scored.</span>
+      <span class="free-count" aria-live="polite">${a.free}<small> / ${stg.n}</small></span>
+      <div class="dots10" aria-hidden="true">${Array.from({ length: stg.n }, (_, i) => `<i class="${i < a.free ? 'on' : ''}"></i>`).join('')}</div>
+      <button class="hit-btn" data-act="testFree">Hit one<small>tap after each ball</small></button></div>
+    <p class="footnote" style="text-align:center">Tracked shots start after ball ${stg.n}, with the ${esc(clubWords(nextClub).toLowerCase())}.</p>
+    </div>
+    <div class="bar"><button class="btn sec" data-act="testSkip">I’m loose · start tracked shots</button></div>`;
+  }
+  const pd = a.pending || {}, has = hasDraft(pd), view = logView(a);
+  const prev = a.shots.filter(s => s.stage === stg.id).slice(-1)[0];
+  const intro = base ? '' : `<div class="card soft retest-note"><span class="lbl">Re-test · ${esc(SKILLS[a.skill])}</span><span>Same as this morning’s baseline: ${esc(clubWords(cl).toLowerCase())}, ${stg.n} balls. Baseline: <b>${pct(a.before)}</b>.</span></div>`;
+  return `${top}${pills}
+  <div class="scroll-y log-body" data-keep="test-${stg.id}">
+  ${intro}
+  <div class="status ${has ? 'draft' : ''}" aria-live="polite"><span>${has ? esc(describeShot({ view, ...draftPart(pd) })) : prev ? esc(describeShot(prev)) : stg.id === 'driver' ? 'Pick two flags as the fairway' : 'Tap the ball, then the grass'}</span><span class="muted">${has ? 'This shot' : `Ball ${Math.min(done + 1, stg.n)} of ${stg.n}`}</span></div>
+  <div class="target-wrap">${targetSvg(a)}</div>
+  ${zoneButtons(view)}
+  <p class="helper opt">Tap the ball for contact, then the grass where it finished. Same club, same swing, every ball.</p>
+  </div>
+  <div class="bar"><div class="bar-row two">
+    <button class="btn sec sm" data-act="testUndo" ${has || a.shots.length ? '' : 'disabled'}>${has ? 'Clear' : 'Undo'}</button>
+    <button class="btn pri next-shot" data-act="testShot" ${has ? '' : 'disabled'}>${done + 1 >= stg.n ? (last ? 'Save · see results' : `Save · next ${esc(a.stages[a.si + 1].name)}`) : 'Next shot ›'}</button>
+  </div></div>`;
+}
+
+// ---------- baseline result ----------
+function skillBars(skills, prev) {
+  return `<div class="skill-bars">${skills.map(s => {
+    const p = prev && prev.find(x => x.id === s.id), d = p && p.v != null && s.v != null ? s.v - p.v : null;
+    return `<div class="skill${s.v != null && s.v < 60 ? ' low' : ''}"><span>${esc(s.name)}</span><b>${s.v == null ? '–' : s.v}</b><div class="tr"><i style="width:${s.v || 0}%"></i></div><small>${esc(s.note)}${d != null ? ` · ${sgn(d)} on last baseline` : ''}</small></div>`;
+  }).join('')}</div>`;
+}
+function recCard(r) {
+  const d = drillById(r.id);
+  return `<button class="rec" data-act="drillInfoPick" data-v="${d.id}" aria-label="${esc(d.name)}. ${esc(r.why)} Tap for how to do it.">${drillGlyph(d.glyph)}<span><b>${esc(d.name)} · ${d.balls} balls</b><span class="why">${esc(r.why)}</span><span class="skilltag">${r.skill === 'transfer' ? 'Transfer' : 'Trains ' + esc(SKILLS[r.skill].toLowerCase())}</span></span></button>`;
+}
+function baselineResultView(id) {
+  const st = S(), sess = st.sessions.find(s => s.id === id && s.kind === 'baseline');
+  if (!sess) return `<div class="top">${back('practice', 'Practice')}</div><h1>Baseline not found</h1>`;
+  const sk = baselineSkills(sess);
+  const prevB = st.sessions.filter(s => s.kind === 'baseline' && s.ended < sess.ended).sort((a, b) => b.ended - a.ended)[0];
+  const recs = sess.recs || recommendDrills(st, sess);
+  const t = todayState(), isToday = t.baselineId === id;
+  const started = !!t.drillsId && (st.sessions.some(x => x.id === t.drillsId) || (st.active && st.active.id === t.drillsId));
+  const balls = recs.reduce((n, r) => n + (drillById(r.id).balls || 0), 0);
+  return `
+  <div class="top">${back('practice', 'Practice')}</div>
+  <div class="scroll-y" data-keep="bres">
+  <div class="title-block"><span class="eyebrow">Baseline · ${fmtDate(sess.ended)} · ${sess.shots.length} tracked balls</span><h1>${esc(baseHead(sess, recs))}</h1></div>
+  <div class="card"><span class="lbl">Your skills ${isToday ? 'today' : 'that day'}</span>${skillBars(sk, prevB ? baselineSkills(prevB) : null)}</div>
+  <span class="lbl">${isToday ? 'Today’s drills' : 'Drills from this baseline'}</span>
+  ${recs.map(recCard).join('')}
+  <p class="footnote">Picked from what the baseline showed. A drill that has moved your skill before goes first.</p>
+  </div>
+  <div class="bar">${isToday && started
+    ? `<a class="btn sec" href="#/practice">Back to today’s session</a>`
+    : `<button class="btn pri" data-act="startRecDrills" data-v="${id}">Start drills · ${balls} balls</button>${isToday ? '<a class="btn plain" href="#/range">Pick my own drills</a>' : ''}`}</div>`;
+}
+
+// ---------- re-test result ----------
+function retestResultView(id) {
+  const sess = S().sessions.find(s => s.id === id && s.kind === 'retest');
+  if (!sess) return `<div class="top">${back('practice', 'Practice')}</div><h1>Re-test not found</h1>`;
+  const name = SKILLS[sess.skill], d = sess.value != null && sess.before != null ? sess.value - sess.before : null;
+  const head = d == null ? 'Re-test saved' : d >= 10 ? `${name} up ${d} points` : d <= -10 ? `${name} down ${-d} points` : `${name} held steady`;
+  const drills = (sess.drillIds || []).map(x => drillById(x)).filter(Boolean).map(x => x.name);
+  return `
+  <div class="top">${back('practice', 'Practice')}</div>
+  <div class="scroll-y" data-keep="rres">
+  <div class="title-block"><span class="eyebrow">Re-test · ${fmtDate(sess.ended)} · ${sess.shots.length} balls</span><h1>${esc(head)}</h1></div>
+  <div class="card">
+    <div class="metric-row"><b>Baseline</b><span>${pct(sess.before)}</span></div>
+    <div class="metric-row"><b>After the drills</b><span>${pct(sess.value)}${d != null ? ` · ${d ? sgn(d) : 'no change'}` : ''}</span></div>
+    <div class="metric-row"><b>Club</b><span>${esc(club(sess.stages[0] ? stageClub(sess.stages[0], S().bag) : sess.club).name)}</span></div>
+    ${drills.length ? `<div class="metric-row"><b>Drills</b><span>${esc(drills.join(', '))}</span></div>` : ''}</div>
+  <div class="card soft"><span class="lbl t-gold">How to read it</span><span>Five balls is a quick read, and the end of a session flatters you. The next baseline is the number that ranks drills, because learning that lasts shows up a session later.</span></div>
+  </div>
+  <div class="bar"><a class="btn pri" href="#/practice">Done</a></div>`;
+}
+
+// ---------- two-button drill logger ----------
+const tallyOf = (a, d, kind) => (kind === 'putt' ? a.putts : a.shots).filter(x => x.drill === d.id && x.tally);
+function tallyContext(a, d, kind, n) {
+  if (kind === 'putt') return `<b>${a.dist} ft</b> · ${{ left: 'Breaks left', straight: 'Straight', right: 'Breaks right' }[a.brk]}`;
+  const cl = club(a.club);
+  if (d.mode === 'ladder') return `Target <b>${LADDER_YDS[n % LADDER_YDS.length]} yds</b> · steps up each ball`;
+  if (d.mode === 'clock') { const c = CLOCK[n % CLOCK.length]; return `Backswing to <b>${c.name}</b> · about ${Math.round(cl.carry * c.share)} yds`; }
+  if (d.mode === 'grip') return n % 2 ? `<b>Choked 1 in</b> · ${cl.choked} yds` : `<b>Full grip</b> · ${cl.carry} yds`;
+  if (d.mode === 'onedist') { const p = oneDistPlan(d)[n % 3]; return `<b>${esc(club(p.club).name)}</b> ${esc(shotType(p.type).name.toLowerCase())} · to ${club(d.club).carry} yds`; }
+  if (d.mode === 'nine') { const [h, c] = NINE_SEQ[n % 9]; return `This ball: <b>${shapeWords(h, c)}</b>`; }
+  if (d.mode === 'punch') return 'This ball: <b>low</b>, under a branch';
+  if (d.tracker === 'play9') { const now = p9Now(a); return now ? `<b>Hole ${now.h + 1}</b> · par ${now.H.par} · ${now.phase === 'approach' ? `${now.left} to the pin` : now.phase === 'tee' ? 'tee shot' : `lay-up, ${now.left} to go`}` : 'All 9 holes played'; }
+  return `<b>${esc(cl.name)}</b> · ${esc(shotType(a.type).name)}`;
+}
+function tallyLog(a, d, kind) {
+  const putt = kind === 'putt', xs = tallyOf(a, d, kind), total = (putt ? d.putts : d.balls) || 10;
+  const n = xs.length, yes = xs.filter(x => x.hit).length, no = n - yes, left = Math.max(0, total - n);
+  const t = tallyFor(d.id), more = a.di < a.drills.length - 1, unit = putt ? 'putt' : 'ball';
+  const sub = `${putt ? 'Putt' : 'Ball'} ${Math.min(n + 1, total)} of ${total}${putt ? '' : ' · ' + esc(clubShort(club(a.club)))}`;
+  const tgt = d.detail && d.detail.target ? `Target: ${esc(d.detail.target.text)}` : '';
+  const trail = xs.slice(-24).map(x => `<i class="${x.hit ? 'y' : 'n'}"></i>`).join('') + Array.from({ length: Math.min(left, Math.max(0, 24 - Math.min(24, n))) }, () => '<i class="e"></i>').join('');
+  const rated = (a.ratings || {})[d.id];
+  return `
+  ${logTop(putt ? 'endPutt' : 'endRange', d, sub, 'tallyFinish', more, n >= total || !n ? null : 'Done')}
+  ${putt ? '' : clubRail(a, d)}
+  <div class="scroll-y log-body" data-keep="tlog-${d.id}">
+  <button class="setup-row ctx-row" data-act="${putt ? 'openPuttSetup' : 'openShotSetup'}"><span>${tallyContext(a, d, kind, n)}</span><span class="muted setup-change">Change${ic('chev', 16)}</span></button>
+  <div class="card q-card"><span class="lbl">One question, every ${unit}</span><span class="q">${esc(t.q)}</span>${t.hint ? `<span class="muted">${esc(t.hint)}</span>` : ''}</div>
+  <div class="tally">
+    <button class="yes" data-act="tally" data-v="1" aria-label="${esc(t.yes[0])}. ${yes} so far."><b>${yes}</b><span>${esc(t.yes[0])}</span>${t.yes[1] ? `<small>${esc(t.yes[1])}</small>` : ''}</button>
+    <button class="no" data-act="tally" data-v="0" aria-label="${esc(t.no[0])}. ${no} so far."><b>${no}</b><span>${esc(t.no[0])}</span>${t.no[1] ? `<small>${esc(t.no[1])}</small>` : ''}</button>
+  </div>
+  <div class="trail" role="img" aria-label="${yes} ${esc(t.yes[0].toLowerCase())}, ${no} ${esc(t.no[0].toLowerCase())}, ${left} to go">${trail}</div>
+  ${tgt ? `<p class="footnote" style="text-align:center">${tgt}</p>` : ''}
+  </div>
+  <div class="bar"><div class="bar-row two">
+    <button class="btn sec sm" data-act="tallyUndo" ${n ? '' : 'disabled'}>Undo</button>
+    <button class="btn pri" data-act="tallyFinish" ${n ? '' : 'disabled'}>${!n ? `${total} ${unit}s to go` : left ? `${left} left · rate it now` : rated ? 'See the drill score' : 'Rate this drill'}</button>
+  </div></div>`;
+}
+function tallyDrill() {
+  const a = S().active;
+  return a.kind === 'putt' ? drillById(a.drills[a.di]) : currentDrill(a);
+}
+function rateSheet() {
+  const a = S().active, d = tallyDrill(), kind = a.kind, xs = tallyOf(a, d, kind);
+  const t = tallyFor(d.id), w = rateWords(d.id), cur = (a.ratings || {})[d.id], hit = xs.filter(x => x.hit).length;
+  const opts = [['good', 'Good', ic('check', 22)], ['okay', 'Okay', '~'], ['poor', 'Poor', ic('x', 22)]];
+  return `<div class="sheet-wrap" data-act="closeSheet"><div class="sheet" role="dialog" aria-label="How did it feel?" data-stop>
+    <div class="grab"></div><div class="sheet-title"><h2>How did it feel?</h2><button class="sheet-done" data-act="rateDrill" data-v="skip">Skip</button></div>
+    <div class="sheet-body"><p class="footnote">${hit} of ${xs.length} ${esc(t.yes[0].toLowerCase())}. Now the quality, in one tap.</p>
+    <div class="rate-opts">${opts.map(([k, name, g]) => `<button class="rate-opt ${k}${cur === k ? ' on' : ''}" data-act="rateDrill" data-v="${k}" aria-pressed="${cur === k}"><i aria-hidden="true">${g}</i><span><b>${name}</b><span>${esc(w[k])}</span></span></button>`).join('')}</div>
+    </div></div></div>`;
+}
+function drillResultView(kind) {
+  const a = S().active;
+  if (!a || a.kind !== kind) { go('practice'); return ''; }
+  const d = drillById(a.lastDrill) || tallyDrill();
+  const r = drillResult(a, d.id);
+  if (!r) { go(kind + '/log'); return ''; }
+  const t = tallyFor(d.id), more = a.di < a.drills.length - 1, nd = more ? drillById(a.drills[a.di + 1]) : null;
+  const pts = skillPoints(d, { ...a, ended: Date.now() });
+  const sc = pts.map(p => p.score);
+  const meaning = r.band === 'Solid' ? 'Solid · 75 and up' : r.band === 'Building' ? 'Building · solid is 75 and up' : 'Not yet · building starts at 50';
+  const rateWord = r.rating ? capWord(r.rating) : 'Skipped';
+  const clubs = kind === 'range' ? [...new Set(a.shots.filter(x => x.drill === d.id).map(x => clubShort(club(x.club))))].join(', ') : `${a.dist} ft`;
+  return `
+  <div class="top">${back(kind + '/log', d.name)}</div>
+  <div class="scroll-y" data-keep="dres">
+  <div class="title-block"><span class="eyebrow">${esc(d.name)} · ${r.n} ${kind === 'putt' ? 'putts' : 'balls'} · ${esc(clubs)}</span><h1>${esc(skillName(d))} is ${r.band === 'Not yet' ? 'not there yet' : r.band.toLowerCase()}</h1></div>
+  <div class="card"><div class="score-ring">${ring(r.score, r.band)}<span><b>Drill score ${r.score}</b><span class="muted">${meaning}</span></span></div>
+    <div class="metric-row"><b>${esc(t.yes[0])}</b><span>${r.hit} of ${r.n} · ${r.rate}%${r.met === true ? ' · target met' : r.met === false && r.target ? ` · target ${esc(r.target)}` : ''}</span></div>
+    <div class="metric-row"><b>How it felt</b><span>${rateWord}</span></div>
+    <div class="metric-row"><b>Score</b><span>${r.rating ? `${r.rate}% × 0.7 + ${rateWord} ${({ good: 100, okay: 60, poor: 20 })[r.rating]} × 0.3` : 'The count alone, no rating'}</span></div></div>
+  ${r.flag ? `<div class="card soft"><span class="lbl t-gold">Feel versus count</span><span>${esc(r.flag)}</span></div>` : ''}
+  <div class="card"><span class="lbl">${esc(skillName(d))} · ${sc.length > 1 ? `last ${Math.min(6, sc.length)} sessions` : 'first session'}</span>
+    ${spark(sc)}<span class="muted">${sc.length > 1 ? `${sc[Math.max(0, sc.length - 6)]} → ${sc[sc.length - 1]} · skill score ${skillScore(pts)}` : 'The trend line starts next time.'}</span></div>
+  </div>
+  <div class="bar"><button class="btn pri" data-act="tallyNext">${more ? `Next drill · ${esc(nd.name)}` : 'Finish session'}</button></div>`;
+}
+
+// Recap for sessions logged with the two buttons.
+function tallyRecapView(sess) {
+  const st = S(), putt = sess.kind === 'putt', ds = sessionDrills(sess);
+  const n = entriesOf(sess).length;
+  const low = ds.slice().sort((x, y) => x.score - y.score)[0];
+  const head = !ds.length ? 'Session saved' : ds.length === 1 ? `${ds[0].drill.name}: ${ds[0].band.toLowerCase()}` : low.score >= 75 ? 'Solid across the board' : `${skillName(low.drill)} needs the most work`;
+  const t = todayState(), todays = t.drillsId === sess.id && t.baselineId;
+  let retest = '';
+  if (todays) {
+    const done = t.retestId && st.sessions.find(x => x.id === t.retestId);
+    const base = st.sessions.find(x => x.id === t.baselineId);
+    const first = base && (base.recs || []).find(r => r.id !== 'play9');
+    const plan = retestPlan(first ? first.skill : 'contact');
+    retest = done ? `<a class="card" href="#/baseline/retest/${done.id}" style="text-decoration:none;color:inherit"><span class="lbl">Re-test</span><span>${esc(SKILLS[done.skill])}: ${pct(done.before)} → ${pct(done.value)}</span></a>`
+      : base ? `<div class="card hero"><span class="lbl">Did it stick?</span><span>5 balls with your ${esc(club(stageClub(plan.stage, st.bag)).name)} to check ${esc(SKILLS[plan.skill].toLowerCase())} against this morning’s baseline.</span><button class="btn goldbtn" data-act="startRetest">Re-test · 5 balls</button></div>` : '';
+  }
+  return `
+  <div class="top">${back(todays ? 'practice' : '', todays ? 'Practice' : 'Home')}</div>
+  <div class="scroll-y" data-keep="trecap">
+  <div class="title-block"><span class="eyebrow">${putt ? 'Putting' : 'Range'} recap · ${fmtDate(sess.ended)} · ${n} ${putt ? 'putts' : 'balls'}</span><h1>${esc(head)}</h1></div>
+  ${ds.map(r => `<div class="card drill-card"><div class="score-ring">${ring(r.score, r.band, 56)}<span><b>${esc(r.drill.name)}</b><span class="muted">${r.hit} of ${r.n} ${esc(tallyFor(r.drill.id).yes[0].toLowerCase())} · felt ${r.rating ? r.rating : 'not rated'} · ${r.band}</span></span></div>${r.flag ? `<span class="muted flag">${esc(r.flag)}</span>` : ''}</div>`).join('')}
+  ${retest}
+  </div>
+  <div class="bar"><a class="btn ${retest && !t.retestId ? 'sec' : 'pri'}" href="#/${todays ? 'practice' : ''}">Done</a></div>`;
+}
+
+// ---------- what helps you ----------
+function helpsView() {
+  const st = S(), imp = drillImpact(st), nb_ = st.sessions.filter(s => s.kind === 'baseline').length;
+  const rows = Object.entries(imp).map(([id, o]) => ({ d: drillById(id), ...o })).filter(x => x.d && (x.n || x.same.length))
+    .sort((a, b) => (b.n >= 3) - (a.n >= 3) || (b.avg != null ? b.avg : -999) - (a.avg != null ? a.avg : -999) || (b.sameAvg || 0) - (a.sameAvg || 0));
+  const row = x => `<button class="impact" data-act="drillInfoPick" data-v="${x.d.id}">${drillGlyph(x.d.glyph)}<span><b>${esc(x.d.name)}</b><span class="muted">${esc(SKILLS[x.skill] || x.d.trains)} · ${x.n} session${x.n === 1 ? '' : 's'}${x.n < 3 ? ' <span class="chip-read">Early read</span>' : ''}${x.sameAvg != null ? ` · re-test ${sgn(x.sameAvg)}` : ''}</span></span><span class="delta${x.avg == null || x.avg <= 2 ? ' flat' : ''}">${x.avg == null ? '–' : sgn(x.avg)}<small>next session</small></span></button>`;
+  return `
+  <div class="top">${back('practice', 'Practice')}</div>
+  <h1>What helps you</h1>
+  <div class="scroll-y" data-keep="helps">
+  <p class="helper">How much each drill moved its skill from one baseline to the next. Retention counts, not just the good balls at the end of a drill.</p>
+  ${rows.length ? `<div class="card impact-list">${rows.map(row).join('')}</div>`
+    : `<div class="card soft"><span class="lbl">Nothing to rank yet</span><span>${nb_ ? `${nb_} baseline${nb_ === 1 ? '' : 's'} so far. ` : ''}Do a baseline, your drills, and a baseline again next session. Each pair of baselines shows what the drills between them changed.</span></div>`}
+  <p class="footnote">A drill needs 3 sessions before it is ranked. Points are percentage points on the skill’s baseline number.</p>
+  </div>`;
+}
+
+// ---------- actions ----------
+const startRangeBase = actions.startRange;
+Object.assign(actions, {
+  startRange: () => {
+    startRangeBase();
+    const a = S().active;
+    if (a && a.kind === 'range' && !todayState().drillsId) setToday(t => { t.drillsId = a.id; });
+  },
+  flowStep: v => {
+    const t = todayState(), st = S(), has = id => id && st.sessions.find(x => x.id === id);
+    if (v === 'warm') return actions.warmRoutine();
+    if (v === 'baseline') return has(t.baselineId) ? go('baseline/result/' + t.baselineId) : startTest('baseline');
+    if (v === 'drills') {
+      const s = has(t.drillsId);
+      if (s) return go(`${s.kind}/recap/${s.id}`);
+      if (st.active && st.active.id === t.drillsId) return go(st.active.kind + '/log');
+      if (has(t.baselineId)) return go('baseline/result/' + t.baselineId);
+      return go('range');
+    }
+    if (v === 'retest') return has(t.retestId) ? go('baseline/retest/' + t.retestId) : actions.startRetest();
+  },
+  flowSkip: v => { setToday(t => { t[{ warm: 'warmSkip', baseline: 'baseSkip', retest: 'retestSkip' }[v]] = true; }); render(); },
+  warmDone: () => { stopWarm(); setToday(t => { t.warm = true; }); go('practice'); },
+  warmBell: (v, el) => {
+    update(s => { s.warmBell = s.warmBell === false; });
+    app.querySelectorAll('[data-act="warmBell"]').forEach(b => b.setAttribute('aria-checked', String(S().warmBell !== false)));
+    if (S().warmBell !== false) { unlockAudio(); bell(1); }
+  },
+  detailTrack: (v, el) => { update(s => { s.detailTrack = !s.detailTrack; }); el.setAttribute('aria-checked', String(!!S().detailTrack)); },
+  // baseline and re-test
+  testFree: () => {
+    let moved = false;
+    update(s => { const A = s.active; A.free++; if (A.free >= A.stages[A.si].n) { A.si++; setStage(A, s.bag); moved = true; } });
+    buzz(8);
+    if (moved) toast(`Loose. Now ${S().active.stages[S().active.si].n} tracked with the ${clubWords(club(S().active.club)).toLowerCase()}`);
+    render();
+  },
+  testSkip: () => {
+    const a = S().active;
+    if (a.si >= a.stages.length - 1) return finishTest();
+    update(s => { s.active.si++; s.active.pending = {}; setStage(s.active, s.bag); });
+    render();
+  },
+  testShot: () => {
+    const a = S().active, pd = a.pending || {};
+    if (!hasDraft(pd)) return toast('Tap the ball, then the grass');
+    const stg = a.stages[a.si];
+    const shot = { t: Date.now(), drill: a.kind, stage: stg.id, club: a.club, type: a.type, view: logView(a), hand: S().hand, height: null, carry: null, tracker: 'full', ...draftPart(pd) };
+    if (!shot.curve) shot.curve = null;
+    let next = null, all = false;
+    update(s => {
+      const A = s.active; A.shots.push(shot); A.pending = {};
+      if (A.shots.filter(x => x.stage === stg.id).length >= stg.n) {
+        if (A.si < A.stages.length - 1) { A.si++; setStage(A, s.bag); next = A.stages[A.si].name; } else all = true;
+      }
+    });
+    buzz(12);
+    if (all) return finishTest();
+    if (next) toast(`${stg.name} done. Next: ${next}`);
+    render();
+  },
+  testUndo: () => {
+    update(s => {
+      const A = s.active;
+      if (hasDraft(A.pending)) { A.pending = {}; return; }
+      const x = A.shots.pop(); if (!x) return;
+      const i = A.stages.findIndex(st => st.id === x.stage);
+      if (i >= 0 && i !== A.si) { A.si = i; setStage(A, s.bag); }
+    });
+    render();
+  },
+  testClose: () => {
+    const a = S().active, base = a.kind === 'baseline';
+    if (!a.shots.length && !a.free) { update(s => { s.active = null; }); go('practice'); return; }
+    openOverlay(`<div class="modal-wrap"><div class="modal" role="alertdialog" aria-label="Stop the ${base ? 'baseline' : 're-test'}?"><h2>Stop the ${base ? 'baseline' : 're-test'}?</h2><p>${a.shots.length ? `${a.shots.length} tracked ball${a.shots.length > 1 ? 's' : ''} will not be saved. ` : ''}A part ${base ? 'baseline' : 're-test'} would make the comparison unfair.${base && a.shots.length ? ' Use Finish to save what you have.' : ''}</p>
+      <div class="btn-row"><button class="btn sec" data-modal="cancel">Keep going</button><button class="btn pri" data-modal="ok">Stop</button></div></div></div>`);
+    const wrap = document.querySelector('.modal-wrap');
+    wrap.querySelector('[data-modal=cancel]').focus();
+    wrap.addEventListener('click', e => {
+      const m = e.target.closest('[data-modal]');
+      if (!m && e.target !== wrap) return;
+      wrap.remove();
+      if (m && m.dataset.modal === 'ok') { update(s => { s.active = null; }); go('practice'); }
+    });
+  },
+  startRecDrills: v => {
+    const base = S().sessions.find(x => x.id === v);
+    const drills = ((base && base.recs) || []).map(r => r.id).filter(id => drillById(id));
+    if (!drills.length) return go('range');
+    if (S().active) finishActive();
+    const first = drillById(drills[0]), st0 = drillStartClub({ shots: [], club: first.club }, first);
+    update(s => { s.active = { kind: 'range', id: uid(), started: Date.now(), drills, di: 0, club: st0.club, type: st0.type, shots: [], pending: {}, baselineId: v }; });
+    if (todayState().baselineId === v) setToday(t => { t.drillsId = S().active.id; });
+    go('range/log');
+  },
+  startRetest: () => {
+    const t = todayState(), st = S();
+    const base = st.sessions.find(x => x.id === t.baselineId);
+    if (!base) return toast('A re-test needs today’s baseline');
+    const first = (base.recs || []).find(r => r.id !== 'play9');
+    const plan = retestPlan(first ? first.skill : 'contact');
+    let before = metric(plan.skill, base.shots.filter(s => s.stage === plan.stage.id));
+    if (before == null) { const b = baselineSkills(base).find(x => x.id === plan.skill); before = b ? b.v : null; }
+    const ds = st.sessions.find(x => x.id === t.drillsId);
+    const drillIds = ds ? [...new Set(entriesOf(ds).map(x => x.drill))] : (base.recs || []).map(r => r.id);
+    startTest('retest', { stage: plan.stage, skill: plan.skill, before, baselineId: base.id, drillIds });
+  },
+  // two-button drills
+  tally: v => {
+    const a = S().active, putt = a.kind === 'putt', d = tallyDrill(), hit = v === '1';
+    const total = (putt ? d.putts : d.balls) || 10, t = tallyFor(d.id);
+    const n0 = tallyOf(a, d, a.kind).length;
+    if (n0 >= total) return actions.tallyFinish();
+    update(s => {
+      const A = s.active;
+      if (putt) { A.putts.push({ t: Date.now(), drill: d.id, dist: A.dist, brk: A.brk, tally: true, hit, made: t.q === 'Made it?' ? hit : null }); return; }
+      const shot = { t: Date.now(), drill: d.id, club: A.club, type: A.type, view: 'tally', hand: s.hand, tally: true, hit, contact: null, finish: null, curve: null, carry: null, height: null, x: null, y: null, tracker: d.tracker || 'full' };
+      if (d.tracker === 'play9') { const now = p9Now(A); if (now) Object.assign(shot, { hole: now.h + 1, par: now.H.par, phase: now.phase, dist: now.left }); }
+      if (d.mode === 'nine' || d.mode === 'punch') { const [h, c] = d.mode === 'punch' ? ['low', 'none'] : NINE_SEQ[n0 % 9]; shot.plan = { h, c }; }
+      if (d.mode === 'ladder') shot.target = LADDER_YDS[n0 % LADDER_YDS.length];
+      if (d.mode === 'clock') shot.swing = CLOCK[n0 % CLOCK.length].id;
+      if (d.mode === 'grip') shot.grip = n0 % 2 ? 'choked' : 'full';
+      A.shots.push(shot);
+      if (d.tracker === 'play9' || d.mode === 'onedist') { const nx = drillStartClub(A, d); A.club = nx.club; A.type = nx.type; }
+    });
+    buzz(hit ? 12 : [8, 40, 8]);
+    render();
+    if (n0 + 1 >= total) setTimeout(() => openOverlay(rateSheet()), 220);
+  },
+  tallyUndo: () => {
+    const a = S().active, d = tallyDrill();
+    update(s => {
+      const A = s.active, list = A.kind === 'putt' ? A.putts : A.shots;
+      for (let i = list.length - 1; i >= 0; i--) if (list[i].drill === d.id && list[i].tally) { list.splice(i, 1); break; }
+      if (A.ratings) delete A.ratings[d.id];
+      if (A.kind === 'range' && (d.tracker === 'play9' || d.mode === 'onedist')) { const nx = drillStartClub(A, d); A.club = nx.club; A.type = nx.type; }
+    });
+    render();
+  },
+  tallyFinish: () => {
+    const a = S().active, d = tallyDrill(), n = tallyOf(a, d, a.kind).length;
+    if (!n) {
+      if (a.di < a.drills.length - 1) return a.kind === 'putt' ? actions.nextPuttDrill() : actions.nextDrill();
+      return confirmEnd(a.kind);
+    }
+    if (a.ratings && a.ratings[d.id] && a.lastDrill === d.id) return go(a.kind + '/drill');
+    openOverlay(rateSheet());
+  },
+  rateDrill: v => {
+    const a = S().active, d = tallyDrill();
+    update(s => { const A = s.active; A.ratings = A.ratings || {}; if (v === 'skip') delete A.ratings[d.id]; else A.ratings[d.id] = v; A.lastDrill = d.id; });
+    closeOverlays();
+    go(a.kind + '/drill');
+  },
+  tallyNext: () => {
+    const a = S().active;
+    if (!a) return go('practice');
+    if (a.di >= a.drills.length - 1) return a.kind === 'putt' ? actions.endPutt() : actions.endRange();
+    update(s => {
+      const A = s.active; A.di++; A.pending = {}; A.ppend = {};
+      const nd = A.kind === 'putt' ? drillById(A.drills[A.di]) : currentDrill(A);
+      if (A.kind === 'putt') { A.dist = nd.dist; A.brk = nd.brk; } else { const st0 = drillStartClub(A, nd); A.club = st0.club; A.type = st0.type; }
+    });
+    go(a.kind + '/log');
+  },
+});
 
 document.addEventListener('click', e => {
   if (ui.railHeld) { ui.railHeld = false; if (!ui.holdUp || Date.now() - ui.holdUp < 600) { e.preventDefault(); e.stopPropagation(); return; } }

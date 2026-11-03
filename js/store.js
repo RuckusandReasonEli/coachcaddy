@@ -15,6 +15,9 @@ function fresh() {
     plan: null,            // saved "next time" plan
     conditions: { temp: 70, moisture: 'normal', elev: 0, difficulty: 'medium', set: false },
     warmAuto: true,        // warm-up cards roll into the next move when the timer ends
+    warmBell: true,        // a chime between warm-up moves
+    detailTrack: false,    // v0.8: drills use two buttons; true brings back the pictures inside drills
+    today: null,           // today's practice session: warm-up, baseline, drills, re-test
     caddy: { target: 150, surface: 'fairway', slope: 'flat', steep: false, tab: 'sheet' },
     courses: [],           // courses added from OpenGolfAPI or typed in
     lastState: '',         // state last picked in the course search

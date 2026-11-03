@@ -70,6 +70,21 @@ export function makeSample() {
     });
     sessions.push({ kind: 'range', id: uid(), started: start, ended: start + 3600000, drills: p.drills, shots });
   });
+  // baselines between the range sessions, so What helps you has something to rank
+  const STAGES = [['wedge', 'PW', 'iron'], ['iron', '7i', 'iron'], ['driver', 'D', 'wood']];
+  [21, 16, 11, 6, 1.5].forEach((ago, i) => {
+    const start = now - ago * day, shots = [];
+    STAGES.forEach(([stage, c, kind]) => {
+      for (let k = 0; k < 5; k++) shots.push({ ...rangeShot(r, c, kind, Math.min(0.92, 0.5 + i * 0.08), 'baseline', start + shots.length * 60000), stage, hand: 'right', carry: null, tracker: 'full' });
+    });
+    sessions.push({ kind: 'baseline', id: uid(), started: start, ended: start + 1500000, stages: [], free: 10, shots });
+  });
+  // one two-button drill session, rated
+  const tStart = now - 1 * day, tShots = [];
+  [['line', '8i', 15, 0.78], ['ladder', '56', 15, 0.6]].forEach(([drill, c, n, q]) => {
+    for (let k = 0; k < n; k++) tShots.push({ t: tStart + tShots.length * 60000, drill, club: c, type: drill === 'ladder' ? 'pitch' : 'full', view: 'tally', hand: 'right', tally: true, hit: r() < q, contact: null, finish: null, curve: null, carry: null, height: null, x: null, y: null, tracker: 'full' });
+  });
+  sessions.push({ kind: 'range', id: uid(), started: tStart, ended: tStart + 2400000, drills: ['line', 'ladder'], di: 1, shots: tShots, ratings: { line: 'okay', ladder: 'poor' } });
   // putting
   const putts = [];
   for (let k = 0; k < 20; k++) {

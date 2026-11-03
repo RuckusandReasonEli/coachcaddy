@@ -1117,3 +1117,102 @@ input[type=range]::-moz-range-thumb { width: 28px; height: 28px; border-radius: 
 .club-form input::-webkit-outer-spin-button, .club-form input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .club-form input[type=number] { -moz-appearance: textfield; }
 .out-chips .chip, .outcome .chips .chip { font-size: 0.8824rem; }
+
+/* ---------- v0.8: today's session, baseline, two-button drills, scores ---------- */
+.flow { display: flex; flex-direction: column; gap: 0; padding: 4px 0; }
+.flow-step { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 16px; border-top: 1px solid var(--line); }
+.flow-step:first-child { border-top: 0; }
+.flow-n { width: 32px; height: 32px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font: 700 0.8824rem var(--font-text); background: var(--sf2); color: var(--ink2); }
+.flow-step.done .flow-n { background: var(--brand); color: var(--onBrand); }
+.flow-step.now .flow-n { background: var(--gold); color: #13231B; }
+.flow-step b { display: block; font-size: 1rem; font-weight: 600; }
+.flow-step span.muted { font-size: 0.8235rem; }
+.flow-tag { font-size: 0.7647rem; font-weight: 600; color: var(--brand); }
+.flow-tag.gold { color: var(--goldInk); }
+.flow-card { padding: 0; gap: 0; overflow: hidden; }
+.flow-head { padding: 16px 16px 6px; display: flex; flex-direction: column; gap: 2px; }
+.stage-pills { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.stage-pills span { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 48px; border-radius: 12px; background: var(--sf); border: 1.5px solid var(--line); font-size: 0.7647rem; color: var(--ink2); line-height: 1.2; text-align: center; }
+.stage-pills span b { font-size: 0.8824rem; color: var(--ink); }
+.stage-pills span.done { background: var(--sf2); border-color: transparent; }
+.stage-pills span.on { border: 2px solid var(--brand); background: var(--sf); }
+.stage-pills span.on b { color: var(--brand); }
+.free-card { align-items: center; text-align: center; gap: 10px; padding: 24px 16px; }
+.free-count { font: 600 4.2353rem/1 var(--font-display); font-variant-numeric: tabular-nums; }
+.free-count small { font: 400 1.4118rem var(--font-text); color: var(--ink2); }
+.hit-btn { width: 168px; height: 168px; border-radius: 84px; border: 0; background: var(--brand); color: var(--onBrand); font: 700 1.2941rem var(--font-text); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; box-shadow: 0 10px 24px -12px rgba(0,0,0,.5); }
+.hit-btn small { font-size: 0.8235rem; font-weight: 500; opacity: .85; }
+.dots10 { display: flex; gap: 6px; justify-content: center; }
+.dots10 i { width: 12px; height: 12px; border-radius: 6px; background: var(--line); }
+.dots10 i.on { background: var(--brand); }
+.q-card { gap: 6px; }
+.q-card .q { font: 600 1.2941rem/1.2 var(--font-display); }
+.tally { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.tally button { min-height: 164px; border-radius: 20px; border: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; font: inherit; cursor: pointer; }
+.tally .yes { background: var(--brand); color: var(--onBrand); }
+.tally .no { background: var(--goldSoft); color: var(--goldInk); border: 2px solid var(--gold); }
+.tally b { font: 600 3.0588rem/1 var(--font-display); font-variant-numeric: tabular-nums; }
+.tally span { font-size: 1.1176rem; font-weight: 700; }
+.tally small { font-size: 0.7647rem; opacity: .85; }
+.trail { display: flex; gap: 5px; flex-wrap: wrap; justify-content: center; }
+.trail i { width: 14px; height: 14px; border-radius: 7px; }
+.trail i.y { background: var(--brand); } .trail i.n { background: var(--gold); } .trail i.e { background: var(--line); }
+.rate-opts { display: flex; flex-direction: column; gap: 8px; }
+.rate-opt { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 12px; align-items: center; min-height: 72px; padding: 10px 14px; border-radius: 16px; border: 1.5px solid var(--line); background: var(--sf); text-align: left; font: inherit; color: var(--ink); }
+.rate-opt.on { border: 2px solid var(--brand); }
+.rate-opt i { width: 44px; height: 44px; border-radius: 22px; display: flex; align-items: center; justify-content: center; font: 700 1.0588rem var(--font-text); font-style: normal; }
+.rate-opt.good i { background: var(--brand); color: var(--onBrand); }
+.rate-opt.okay i { background: var(--goldSoft); color: var(--goldInk); }
+.rate-opt.poor i { background: var(--redSoft); color: var(--red); }
+.rate-opt b { font-size: 1rem; display: block; }
+.rate-opt span { font-size: 0.8235rem; color: var(--ink2); }
+.score-ring { display: flex; align-items: center; gap: 16px; }
+.score-ring svg { flex: none; }
+.score-ring b { font: 600 1.2941rem var(--font-display); display: block; }
+.metric-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); font-size: 0.9412rem; }
+.metric-row:first-of-type { border-top: 0; }
+.metric-row span { color: var(--ink2); font-size: 0.8824rem; }
+.skill-bars { display: flex; flex-direction: column; gap: 12px; }
+.skill { display: grid; grid-template-columns: minmax(0, 1fr) 44px; gap: 4px 10px; align-items: center; }
+.skill > span { font-size: 0.8824rem; font-weight: 600; }
+.skill > b { font: 600 1rem var(--font-display); text-align: right; grid-row: 1 / span 2; grid-column: 2; }
+.skill .tr { height: 8px; border-radius: 4px; background: var(--sf2); overflow: hidden; }
+.skill .tr i { display: block; height: 100%; border-radius: 4px; background: var(--brand); }
+.skill.low .tr i { background: var(--gold); }
+.skill small { grid-column: 1; font-size: 0.7647rem; color: var(--ink2); }
+.rec { display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 12px; align-items: start; padding: 12px; border-radius: 16px; background: var(--sf); border: 1px solid var(--line); }
+.rec b { font-size: 1rem; display: block; }
+.rec .why { font-size: 0.8235rem; color: var(--ink2); }
+.rec .skilltag { display: block; margin-top: 4px; font-size: 0.7647rem; font-weight: 600; color: var(--goldInk); }
+.impact { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px; border-top: 1px solid var(--line); }
+.impact:first-child { border-top: 0; }
+.impact b { font-size: 0.9412rem; display: block; }
+.impact .muted { font-size: 0.7647rem; }
+.impact .delta { font: 600 1.1765rem var(--font-display); color: var(--brand); text-align: right; }
+.impact .delta small { display: block; font: 600 0.7059rem var(--font-text); color: var(--ink2); text-align: right; }
+.impact .delta.flat { color: var(--ink2); }
+.chip-read { font-size: 0.7059rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--sf2); color: var(--ink2); }
+.spark { width: 100%; height: 56px; }
+button.flow-step, button.rec, button.impact { width: 100%; background: none; border-left: 0; border-right: 0; border-bottom: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+button.flow-step:first-child { border-top: 0; }
+button.rec { background: var(--sf); border: 1px solid var(--line); }
+.flow-step > span:nth-child(2) { min-width: 0; }
+.flow-step.skipped { opacity: .6; }
+.flow-step.skipped .flow-tag { color: var(--ink2); }
+.flow-step:focus-visible, .rec:focus-visible, .impact:focus-visible { outline: 3px solid var(--sel); outline-offset: -3px; }
+.flow-tag { text-align: right; }
+.impact-list { padding: 0; gap: 0; overflow: hidden; }
+.tally button:active { transform: scale(.98); }
+.tally button:focus-visible { outline: 3px solid var(--sel); outline-offset: 2px; }
+.rate-opt { cursor: pointer; width: 100%; }
+.rate-opt i svg { display: block; }
+.ctx-row > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.drill-card { gap: 6px; }
+.drill-card .score-ring b { font: 600 1rem var(--font-text); }
+.drill-card .flag { font-size: 0.8235rem; }
+.score-ring > span { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.retest-note b { font-weight: 700; }
+.free-card .lbl { text-align: center; }
+.log-body .q-card { padding: 14px 16px; }
+@media (max-height: 700px) { .tally button { min-height: 128px; } .hit-btn { width: 140px; height: 140px; } .free-count { font-size: 3.2941rem; } }
+button.row-link { width: 100%; text-align: left; font: inherit; cursor: pointer; }

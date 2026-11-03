@@ -347,12 +347,13 @@ function sessionClubScore(shots) {
 
 export function reliability(state) {
   const R = RELIABILITY;
-  const range = state.sessions.filter(s => s.kind === 'range').sort((a, b) => b.ended - a.ended);
+  // v0.8: drills log one yes/no answer, so reliability comes from baselines, re-tests and detailed sessions.
+  const range = state.sessions.filter(s => ['range', 'baseline', 'retest'].includes(s.kind) && (s.shots || []).some(x => !x.tally)).sort((a, b) => b.ended - a.ended);
   const perClub = {};
   const all = [];
   range.forEach((sess, idx) => {
     const by = {};
-    (sess.shots || []).forEach(s => { (by[s.club] = by[s.club] || []).push(s); });
+    (sess.shots || []).filter(s => !s.tally).forEach(s => { (by[s.club] = by[s.club] || []).push(s); });
     Object.entries(by).forEach(([id, shots]) => {
       if (shots.length < R.minShotsPerSession) return;
       const score = sessionClubScore(shots);
@@ -498,6 +499,8 @@ export function drillTarget(d, shots) {
   const t = d && d.detail && d.detail.target;
   if (!t) return null;
   let pool = [], hit = 0;
+  const tal = shots.filter(s => s.tally);
+  if (tal.length) { const n = tal.length, h = tal.filter(s => s.hit).length; return { hit: h, n, status: n < Math.ceil(t.of / 2) ? 'few' : h / n >= t.n / t.of - 1e-9 ? 'met' : 'not', text: t.text }; }
   const within = (xs, key) => { const g = {}; xs.forEach(s => { (g[s[key]] = g[s[key]] || []).push(s); });
     return Object.values(g).filter(a => a.length >= 2).flatMap(a => { const m = a.reduce((x, s) => x + s.carry, 0) / a.length; return a.map(s => Math.abs(s.carry - m) <= 5); }); };
   switch (t.m) {

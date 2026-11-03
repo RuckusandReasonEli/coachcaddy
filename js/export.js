@@ -1,14 +1,15 @@
+import { sessionDrills } from './practice.js';
 // CSV export: everything stored on the phone at that moment, one row per record.
 // The first column, record_type, says what the row is: range_shot, putt, course_hole, course_shot, club, setting.
 import { RANGE_DRILLS, PUTT_DRILLS, SHOT_TYPES, BASIC } from './data.js';
 import { reliability, gir, lieWords } from './engine.js';
 
-export const APP_VERSION = '0.7.0';
+export const APP_VERSION = '0.8.0';
 
 const COLS = [
   'record_type', 'session_id', 'session_kind', 'session_status', 'session_date', 'logged_at', 'drill',
   'club', 'swing', 'contact', 'length', 'direction', 'carry_yds', 'target_yds', 'drill_check', 'strike_spot',
-  'shape_planned', 'shape_hit', 'play9_hole', 'play9_par', 'play9_shot',
+  'shape_planned', 'shape_hit', 'play9_hole', 'play9_par', 'play9_shot', 'drill_answer', 'drill_feel', 'drill_score', 'baseline_stage',
   'putt_ft', 'break', 'made', 'finished_ft', 'miss', 'lip_out',
   'hole', 'par', 'strokes', 'putts', 'from', 'result',
   'full_carry', 'choked_carry', 'loft', 'in_bag', 'custom', 'reliability',
@@ -43,12 +44,15 @@ function cell(v) {
   return `"${String(v).replace(/"/g, '""')}"`;
 }
 
+// One row per rated drill: the feel and the drill score (v0.8 two-metric tracking).
+let ratingRows = () => {};
 export function buildCSV(st) {
   const bag = st.bag || [];
   const clubName = id => { const c = bag.find(x => x.id === id); return c ? c.name : id || ''; };
   const swing = id => { const t = SHOT_TYPES.find(x => x.id === id); return t ? t.name : id || ''; };
   const rows = [];
   const add = o => rows.push(o);
+  ratingRows = (s, base) => sessionDrills(s).forEach(r => add({ record_type: 'drill_result', ...base, drill: r.drill.name, drill_check: '', drill_answer: `${r.hit} of ${r.n}`, drill_feel: r.rating ? cap(r.rating) : '', drill_score: r.score }));
   const sessions = (st.sessions || []).map(s => ({ s, status: 'finished' }));
   if (st.active) sessions.push({ s: st.active, status: 'in_progress' });
 
@@ -63,14 +67,22 @@ export function buildCSV(st) {
           carry_yds: x.carry, target_yds: x.target, drill_check: yn(x.check),
           strike_spot: x.face ? (x.face.h === 'center' && x.face.v === 'mid' ? 'Center' : `${cap(x.face.h)}, ${x.face.v}`) : '',
           shape_planned: shape(x.plan), shape_hit: shape(x.got),
-          play9_hole: x.hole, play9_par: x.phase ? x.par : null, play9_shot: PHASE[x.phase] || '' });
+          play9_hole: x.hole, play9_par: x.phase ? x.par : null, play9_shot: PHASE[x.phase] || '', drill_answer: x.tally ? yn(x.hit) : '' });
+      });
+      ratingRows(s, base);
+    } else if (s.kind === 'baseline' || s.kind === 'retest') {
+      (s.shots || []).forEach(x => {
+        const f = x.finish || {};
+        add({ record_type: s.kind === 'baseline' ? 'baseline_shot' : 'retest_shot', ...base, logged_at: stamp(x.t), club: clubName(x.club), swing: swing(x.type), baseline_stage: x.stage,
+          contact: CONTACT[x.contact] || cap(x.contact), length: ROW[f.row] || cap(f.row), direction: (x.view === 'woods' ? WOODS_COL : COL)[f.col] || cap(f.col) });
       });
     } else if (s.kind === 'putt') {
       (s.putts || []).forEach(p => {
         const miss = p.made ? '' : [p.len ? cap(p.len) : '', p.side === 'center' ? 'on line' : p.lowSide != null ? (p.lowSide ? 'low side' : 'high side') : p.side || ''].filter(Boolean).join(' ');
         add({ record_type: 'putt', ...base, logged_at: stamp(p.t), drill: drillName(p.drill), putt_ft: p.dist, break: BRK[p.brk] || '',
-          made: yn(!!p.made), finished_ft: p.made ? 0 : p.ft, miss: cap(miss), lip_out: yn(!!p.lip) });
+          made: p.tally && p.made == null ? '' : yn(!!p.made), finished_ft: p.made ? 0 : p.ft, miss: cap(miss), lip_out: p.tally ? '' : yn(!!p.lip), drill_answer: p.tally ? yn(p.hit) : '' });
       });
+      ratingRows(s, base);
     } else if (s.kind === 'round') {
       const cbase = { ...base, course: s.course && s.course.name, tees: s.course && s.course.tee };
       const FW = { fairway: 'Fairway', left: 'Left', right: 'Right' };
@@ -99,7 +111,7 @@ export function buildCSV(st) {
   const cond = st.conditions || {};
   const plan = st.plan || {};
   [['app_version', APP_VERSION], ['exported_at', stamp(Date.now())], ['theme', st.theme], ['handedness', st.hand],
-   ['warm_up_auto_advance', yn(st.warmAuto)], ['temperature_f', cond.temp], ['moisture', cond.moisture], ['elevation_ft', cond.elev],
+   ['warm_up_auto_advance', yn(st.warmAuto)], ['warm_up_bell', yn(st.warmBell !== false)], ['detailed_drill_tracking', yn(!!st.detailTrack)], ['temperature_f', cond.temp], ['moisture', cond.moisture], ['elevation_ft', cond.elev],
    ['course_difficulty', cond.difficulty], ['next_range_plan', (plan.range || []).map(drillName).join(', ')],
    ['next_putting_plan', (plan.putt || []).map(drillName).join(', ')]]
     .forEach(([k, v]) => add({ record_type: 'setting', setting: k, value: v == null ? '' : String(v) }));
